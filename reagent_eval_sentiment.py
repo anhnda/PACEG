@@ -73,10 +73,8 @@ Usage as standalone eval script (matches PACE main script):
 """
 
 import time
-import math
 import random
 import argparse
-import inspect
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -158,11 +156,12 @@ def _get_label_dist(clf_model, clf_tokenizer, input_ids: torch.Tensor,
 
 
 def _get_top_k_replacements(
+    clf_tokenizer,                     # BUG FIX: passed explicitly, no cache hack
     mlm_tokenizer,
     mlm_model,
     input_ids_clf: torch.Tensor,      # (1, L) — classifier tokenizer ids
     position: int,                     # which token to replace
-    clf_tokens: list[str],             # decoded token strings
+    clf_tokens: list[str],             # decoded token strings (clf vocab)
     top_k: int,
     device: str,
 ) -> list[int]:
@@ -177,35 +176,39 @@ def _get_top_k_replacements(
       which is actually *better* suited to a bidirectional MLM oracle.
 
     Steps:
-      1. Convert the classifier token sequence back to a string.
-      2. Re-encode with the MLM tokenizer, inserting [MASK] at the
-         corresponding word position.
-      3. Run the MLM, collect top-k token strings.
+      1. Convert the classifier token sequence back to a plain string,
+         inserting the MLM [MASK] token at `position`.
+      2. Re-encode with the MLM tokenizer.
+      3. Run the MLM, collect top-k token strings from the MLM vocabulary.
       4. Re-encode those strings with the *classifier* tokenizer to get
          ids that can be substituted into input_ids_clf.
     """
-    # Reconstruct context text from clf tokens (strips special tokens)
-    clf_special = set(mlm_tokenizer.all_special_tokens)
+    clf_special_tokens = set(clf_tokenizer.all_special_tokens)
+    mlm_special_tokens = set(mlm_tokenizer.all_special_tokens)
 
-    # Build a version of the token list with position masked
-    masked_tokens = list(clf_tokens)
-    masked_tokens[position] = mlm_tokenizer.mask_token   # "[MASK]" or "<mask>"
+    # Build masked token list using the CLF token strings, substituting
+    # the MLM's own mask token at `position`.
+    masked_tokens = []
+    for i, tok in enumerate(clf_tokens):
+        if tok in clf_special_tokens:
+            continue                              # skip [CLS]/[SEP]/[PAD]
+        if i == position:
+            masked_tokens.append(mlm_tokenizer.mask_token)
+        else:
+            masked_tokens.append(tok)
 
-    # Re-join — subword tokens from BERT/RoBERTa need convert_tokens_to_string
-    # to correctly handle the Ġ / ## prefixes.
-    masked_text = mlm_tokenizer.convert_tokens_to_string(
-        [t for t in masked_tokens if t not in clf_special]
-    )
+    # Convert to a plain string — handles Ġ (RoBERTa) and ## (BERT) prefixes
+    masked_text = mlm_tokenizer.convert_tokens_to_string(masked_tokens)
 
     mlm_enc = mlm_tokenizer(
         masked_text, return_tensors="pt", truncation=True
     ).to(device)
 
-    # Find [MASK] position in MLM encoding
+    # Locate the [MASK] position in the re-encoded MLM input
     mask_token_id = mlm_tokenizer.mask_token_id
     mask_positions = (mlm_enc["input_ids"][0] == mask_token_id).nonzero(as_tuple=True)[0]
     if len(mask_positions) == 0:
-        # Fallback: couldn't insert mask → return original token as only candidate
+        # Fallback: mask disappeared after re-tokenisation → keep original token
         return [input_ids_clf[0, position].item()]
 
     mask_pos = mask_positions[0].item()
@@ -213,29 +216,25 @@ def _get_top_k_replacements(
     with torch.no_grad():
         mlm_logits = mlm_model(**mlm_enc).logits[0]   # (L_mlm, V_mlm)
 
-    top_k_ids_mlm = mlm_logits[mask_pos].topk(top_k * 3).indices   # over-sample
-
-    # Convert MLM token strings → classifier token ids
-    clf_tok = _clf_cache.get(list(_clf_cache.keys())[0], (None, None))[0]
-    # Re-fetch clf tokenizer safely
-    clf_tokenizer_obj = None
-    for v in _clf_cache.values():
-        clf_tokenizer_obj = v[0]; break
+    # Over-sample top-k*3 to account for filtering below
+    top_k_ids_mlm = mlm_logits[mask_pos].topk(top_k * 3).indices
 
     replacement_ids = []
     for mlm_id in top_k_ids_mlm.tolist():
         token_str = mlm_tokenizer.decode([mlm_id]).strip()
-        if not token_str or token_str in clf_special:
+        if not token_str or token_str in mlm_special_tokens:
             continue
-        # Re-encode with classifier tokenizer (single subword only)
-        clf_ids = clf_tokenizer_obj.encode(token_str, add_special_tokens=False)
-        if len(clf_ids) == 1:          # keep only single-subword replacements
+        # Re-encode with the classifier's tokenizer.
+        # Keep only single-subword results so sequence length stays constant.
+        clf_ids = clf_tokenizer.encode(token_str, add_special_tokens=False)
+        if len(clf_ids) == 1:
             replacement_ids.append(clf_ids[0])
         if len(replacement_ids) >= top_k:
             break
 
     if not replacement_ids:
-        replacement_ids = [input_ids_clf[0, position].item()]   # fallback
+        # Nothing survived filtering — fall back to the original token
+        replacement_ids = [input_ids_clf[0, position].item()]
 
     return replacement_ids[:top_k]
 
@@ -279,7 +278,7 @@ def _compute_importance_scores(
 
         # Get top-k replacement candidates from MLM oracle
         replacement_ids = _get_top_k_replacements(
-            mlm_tokenizer, mlm_model,
+            clf_tokenizer, mlm_tokenizer, mlm_model,
             input_ids, i, clf_tokens, top_k, device,
         )
 
@@ -297,30 +296,39 @@ def _compute_importance_scores(
     return importance
 
 
-# ── Faithfulness metrics (log-odds / comp / suff) ─────────────────────────
-# Identical logic to evaluate_slalom.py — token-level masking with baseline.
+# ── Faithfulness metrics ───────────────────────────────────────────────────
+# Uses the same xai_metrics + *_helper.py path as attcat_eval_sentiment.py
+# and the PACE main script, so results are directly comparable.
 
-def _get_base_emb(clf_model, clf_tokenizer, device: str) -> torch.Tensor:
-    mask_id = clf_tokenizer.mask_token_id or clf_tokenizer.pad_token_id
-    with torch.no_grad():
-        return clf_model.get_input_embeddings()(
-            torch.tensor([[mask_id]], device=device)
-        ).squeeze(0)
+from xai_metrics import (
+    calculate_log_odds,
+    calculate_comprehensiveness,
+    calculate_sufficiency,
+)
 
 
-def _forward_prob_emb(clf_model, embed_input, attention_mask,
-                      pred_id: int, device: str) -> torch.Tensor:
-    with torch.no_grad():
-        logits = clf_model(
-            inputs_embeds=embed_input.to(device),
-            attention_mask=attention_mask.to(device),
-        ).logits[0]
-    return F.softmax(logits, dim=-1)[pred_id]
+def _get_helper_fns(model_name: str):
+    """
+    Return (get_inputs, get_base_token_emb, nn_forward_func) from the
+    appropriate *_helper module, matching the pattern used in attcat_eval
+    and pace_gradients.
+    """
+    if "distilbert" in model_name:
+        from distilbert_helper import get_inputs, get_base_token_emb, nn_forward_func
+    elif "roberta" in model_name:
+        from roberta_helper import get_inputs, get_base_token_emb, nn_forward_func
+    elif "bert" in model_name:
+        from bert_helper import get_inputs, get_base_token_emb, nn_forward_func
+    else:
+        raise NotImplementedError(f"No helper module for model: {model_name}")
+    return get_inputs, get_base_token_emb, nn_forward_func
 
 
 def _compute_faithfulness_metrics(
     clf_model,
     clf_tokenizer,
+    model_name: str,
+    sentence: str,
     input_ids: torch.Tensor,
     attention_mask: torch.Tensor,
     importance: np.ndarray,
@@ -328,48 +336,43 @@ def _compute_faithfulness_metrics(
     topk_pct: int = 20,
 ) -> tuple[float, float, float, int]:
     """
-    Compute log-odds, comprehensiveness, sufficiency using embedding replacement.
+    Compute log-odds, comprehensiveness, sufficiency via xai_metrics helpers.
+    This matches the exact call pattern of attcat_eval_sentiment.py and
+    pace_gradients.py, ensuring metrics are comparable across all methods.
+
     Returns (log_odd, comp, suff, pred_id).
     """
+    get_inputs, get_base_token_emb, nn_forward_func = _get_helper_fns(model_name)
+
+    # Get embedding matrix input (same as other eval scripts)
     embed = clf_model.get_input_embeddings()
     with torch.no_grad():
-        X = embed(input_ids.to(device))                       # (1, L, D)
+        X = embed(input_ids.to(device))                        # (1, L, D)
         logits0 = clf_model(
             inputs_embeds=X, attention_mask=attention_mask.to(device)
         ).logits[0]
     pred_id = int(logits0.argmax().item())
-    prob_orig = F.softmax(logits0, dim=-1)[pred_id]
 
-    base_emb = _get_base_emb(clf_model, clf_tokenizer, device)
-    L = X.shape[1]
+    base_token_emb = get_base_token_emb(clf_model, clf_tokenizer, device)
+    inp = get_inputs(clf_model, clf_tokenizer, sentence, device)
+    # inp unpacking: (input_ids, ref_ids, token_type_ids, ref_type_ids,
+    #                 position_emb, ref_position_emb, type_emb, ref_type_emb, attention_mask)
+    _, _, _, _, position_embed, _, type_embed, _, _ = inp
 
-    special_ids = set(clf_tokenizer.all_special_ids)
-    fixed = torch.tensor(
-        [tid in special_ids for tid in input_ids[0].tolist()],
-        device=device, dtype=torch.bool,
+    attr_full = torch.tensor(importance, dtype=torch.float32, device=device)
+
+    log_odd, _ = calculate_log_odds(
+        nn_forward_func, clf_model, X, position_embed, type_embed,
+        attention_mask, base_token_emb, attr_full, topk=topk_pct,
     )
-
-    attr_rank = torch.tensor(importance, device=device, dtype=torch.float32)
-    attr_rank[fixed] = -float("inf")
-    k = max(1, int((~fixed).sum().item() * topk_pct / 100))
-    topk_idx = torch.topk(attr_rank, k, sorted=False).indices
-
-    # log-odds
-    X_lo = X.clone(); X_lo[0, topk_idx] = base_emb
-    prob_lo = _forward_prob_emb(clf_model, X_lo, attention_mask, pred_id, device)
-    log_odd = (torch.log(prob_lo + 1e-10) - torch.log(prob_orig + 1e-10)).item()
-
-    # comprehensiveness
-    X_comp = X.clone(); X_comp[0, topk_idx] = base_emb
-    prob_comp = _forward_prob_emb(clf_model, X_comp, attention_mask, pred_id, device)
-    comp = (prob_orig - prob_comp).item()
-
-    # sufficiency
-    keep = torch.zeros(L, dtype=torch.bool, device=device)
-    keep[topk_idx] = True; keep[fixed] = True
-    X_suff = X.clone(); X_suff[0, ~keep] = base_emb
-    prob_suff = _forward_prob_emb(clf_model, X_suff, attention_mask, pred_id, device)
-    suff = (prob_orig - prob_suff).item()
+    comp = calculate_comprehensiveness(
+        nn_forward_func, clf_model, X, position_embed, type_embed,
+        attention_mask, base_token_emb, attr_full, topk=topk_pct,
+    )
+    suff = calculate_sufficiency(
+        nn_forward_func, clf_model, X, position_embed, type_embed,
+        attention_mask, base_token_emb, attr_full, topk=topk_pct,
+    )
 
     return log_odd, comp, suff, pred_id
 
@@ -440,9 +443,9 @@ def reagent_classification(
         p_orig, top_k, device,
     )
 
-    # ── Faithfulness metrics ──
+    # ── Faithfulness metrics (via xai_metrics, same path as AttCAT/PACE) ──
     log_odd, comp, suff, pred_id = _compute_faithfulness_metrics(
-        clf_model, clf_tokenizer,
+        clf_model, clf_tokenizer, model_name, sentence,
         input_ids, attention_mask,
         importance, device, topk_pct,
     )
