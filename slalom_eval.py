@@ -142,9 +142,9 @@ def slalom_explain_and_eval(
 
     # ── Extract attribution tensor for ranking ─────────────────────────
     # ── Attribution tensor for metric ranking ──────────────────────────
-    tokens_out = [r["token"] for r in res]
-    values     = np.array([r["value"] for r in res], dtype=np.float32)
-    imps       = np.array([r["imp"]   for r in res], dtype=np.float32)
+    tokens_out = [r[0] for r in res]
+    values     = np.array([r[1] for r in res], dtype=np.float32)
+    imps       = np.zeros_like(values)   # no imp available
     if attr_mode == "value":
         attr = torch.tensor(values)
     elif attr_mode == "imp":
@@ -259,6 +259,7 @@ def run_benchmark(args):
                 topk=args.topk,
                 attr_mode=args.attr_mode,
             )
+            print(res[0])  # see what a single element looks like
             total_log_odd += res["log_odd"]
             total_comp    += res["comp"]
             total_suff    += res["suff"]
