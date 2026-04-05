@@ -205,6 +205,11 @@ def attcat_classification(
         # Squeeze batch dim (always 1) to get clean [seq, d] tensors
         cat_l = (grad_h_l * h_l.detach()).view(-1, grad_h_l.shape[-1])  # [seq, d]
 
+        # DEBUG: print shapes to diagnose einsum mismatch
+        print(f"  [DEBUG] layer={l_idx}  grad_h_l={grad_h_l.shape}  h_l={h_l.shape}  cat_l={cat_l.shape}")
+        if l_idx < len(attn_weights_list):
+            print(f"  [DEBUG] attn_weights_list[{l_idx}]={attn_weights_list[l_idx].shape}  squeezed={attn_weights_list[l_idx].squeeze(0).shape}")
+
         # AttCAT^l_i = mean_H( sum_j alpha_{i,j} * cat_j^l )
         if l_idx < len(attn_weights_list):
             alpha_l = attn_weights_list[l_idx].squeeze(0)  # [H, seq_q, seq_k]
@@ -216,6 +221,7 @@ def attcat_classification(
             attcat_l = cat_l           # plain CAT fallback
 
         attcat_scores = attcat_scores + attcat_l.sum(dim=-1)   # [seq]
+        break  # DEBUG: only run one layer then stop
 
     # ----------------------------------------------------------- token filter
     tokens_raw = tokenizer.convert_ids_to_tokens(input_ids[0].tolist())
