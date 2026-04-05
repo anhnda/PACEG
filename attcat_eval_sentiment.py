@@ -12,14 +12,11 @@ https://github.com/qiangyao1988/AttCAT
 AttCAT Algorithm (per token i, summed over all L layers):
   1. CAT_i^l  = grad(h_i^l) ⊙ h_i^l           (Hadamard product, no ReLU)
   2. AttCAT_i^l = mean_over_heads( alpha_i^l @ CAT_i^l )
-                                                (attention-weighted CAT)
   3. score_i  = sum_l  sum_d  AttCAT_i^l        (scalar per token)
 
-Key implementation note
------------------------
-h^l must stay IN the computation graph (no .detach()) so that
-torch.autograd.grad(logit_c, h_l) actually returns non-zero gradients.
-Attention weights can be safely detached (they are data, not differentiated).
+Metrics (identical to pace_gradients.py):
+  calculate_log_odds / calculate_comprehensiveness / calculate_sufficiency
+  from xai_metrics, using the same helper functions from *_helper.py.
 """
 
 import time
@@ -31,7 +28,11 @@ import numpy as np
 from typing import Dict, List, Tuple
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from datasets import load_dataset
-from xai_metrics import *   # log_odds, comprehensiveness, sufficiency
+from xai_metrics import (
+    calculate_log_odds,
+    calculate_comprehensiveness,
+    calculate_sufficiency,
+)
 
 random.seed(42)
 np.random.seed(42)
@@ -41,22 +42,22 @@ torch.backends.cuda.enable_mem_efficient_sdp(False)
 torch.backends.cuda.enable_math_sdp(True)
 
 # ---------------------------------------------------------------------------
-# Model / tokenizer cache
+# Model / tokenizer cache  (same pattern as pace_gradients.py)
 # ---------------------------------------------------------------------------
-_model_cache: Dict[str, Tuple] = {}
+cache = {}
 
 
-def _load_model(model_name: str, device: str):
-    if model_name not in _model_cache:
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
+def _get_cached(model_name: str, device: str):
+    if model_name not in cache:
+        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
         model = AutoModelForSequenceClassification.from_pretrained(
             model_name,
             output_attentions=True,
             output_hidden_states=True,
         ).to(device)
         model.eval()
-        _model_cache[model_name] = (tokenizer, model)
-    return _model_cache[model_name]
+        cache[model_name] = {"model": model, "tokenizer": tokenizer}
+    return cache[model_name]["model"], cache[model_name]["tokenizer"]
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +65,6 @@ def _load_model(model_name: str, device: str):
 # ---------------------------------------------------------------------------
 
 def _get_encoder_layers(model):
-    """Return the list of transformer encoder layer modules."""
     if hasattr(model, "bert"):
         return list(model.bert.encoder.layer)
     if hasattr(model, "distilbert"):
@@ -75,7 +75,6 @@ def _get_encoder_layers(model):
 
 
 def _get_attn_submodule(layer):
-    """Return the self-attention sub-module of a transformer layer."""
     if hasattr(layer, "attention"):
         return layer.attention
     if hasattr(layer, "self_attn"):
@@ -93,73 +92,63 @@ def attcat_classification(
     show_special_tokens: bool = False,
     device: str = "cpu",
 ) -> Dict:
-    """
-    Compute AttCAT token attributions for a single sentence.
+    t0 = time.perf_counter()
+    model, tokenizer = _get_cached(model_name, device)
 
-    Strategy
-    --------
-    1. Register forward hooks that capture:
-       - h^l : the encoder-layer output TENSOR kept IN the computation graph
-               (absolutely no .detach() here — that was the bug)
-       - alpha^l : attention weights (detached, used only as scalar weights)
-    2. Single forward pass with torch.enable_grad().
-    3. For each layer l:
-         grad_h_l = torch.autograd.grad(logit_c, h_l, retain_graph=True)[0]
-         cat_l    = grad_h_l * h_l.detach()       # [1, seq, d]
-         attcat_l = einsum(alpha_l, cat_l)         # [1, seq, d]
-         scores  += attcat_l[0].sum(-1)            # accumulate [seq]
+    # ── helpers for metrics (same as pace_gradients.py) ──────────────────────
+    if "distilbert" in model_name:
+        from distilbert_helper import get_inputs, get_base_token_emb, nn_forward_func
+    elif "roberta" in model_name:
+        from roberta_helper import get_inputs, get_base_token_emb, nn_forward_func
+    elif "bert" in model_name:
+        from bert_helper import get_inputs, get_base_token_emb, nn_forward_func
+    else:
+        raise NotImplementedError(f"No helper for {model_name}")
 
-    Returns
-    -------
-    dict with keys: tokens, attributions, pred_class, log_odd, comp, suff, time
-    """
-    t0 = time.time()
-    tokenizer, model = _load_model(model_name, device)
-
-    encoding = tokenizer(
+    # ── tokenise ──────────────────────────────────────────────────────────────
+    enc = tokenizer(
         sentence,
         return_tensors="pt",
         truncation=True,
         max_length=512,
     )
-    input_ids      = encoding["input_ids"].to(device)
-    attention_mask = encoding["attention_mask"].to(device)
+    input_ids      = enc["input_ids"].to(device)
+    attention_mask = enc["attention_mask"].to(device)
     seq_len        = input_ids.shape[1]
 
-    # ---------------------------------------------------------------- hooks
-    hidden_states_list: List[torch.Tensor] = []   # in-graph [1, seq, d]
-    attn_weights_list:  List[torch.Tensor] = []   # detached  [1, H, seq, seq]
+    # ── forward hooks ─────────────────────────────────────────────────────────
+    # CRITICAL: store h WITHOUT detach so autograd can reach it from logits.
+    hidden_states_list: List[torch.Tensor] = []
+    attn_weights_list:  List[torch.Tensor] = []
     hooks = []
 
     encoder_layers = _get_encoder_layers(model)
 
     def make_layer_hook(idx: int):
         def fn(module, inp, out):
-            # DistilBERT TransformerBlock returns a tuple whose elements can be:
-            #   (attn_weights [1,H,seq,seq],  ffn_output [1,seq,d])
-            # We want the 3-D hidden-state tensor, not the 4-D attention matrix.
-            # Strategy: pick the last element that is 3-D [B, seq, d].
+            # Pick the 3-D hidden-state tensor from the output tuple.
+            # DistilBERT TransformerBlock returns (attn_weights[1,H,s,s], ffn_out[1,s,d])
+            # BERT/RoBERTa returns (hidden_state[1,s,d], ...)
+            # Strategy: take the last 3-D tensor in the tuple.
             if isinstance(out, tuple):
                 h = None
                 for t in reversed(out):
                     if isinstance(t, torch.Tensor) and t.dim() == 3:
                         h = t
                         break
-                if h is None:          # fallback: first element
+                if h is None:
                     h = out[0]
             else:
                 h = out
-            # *** Keep h in the computation graph — NO detach ***
+            # Keep in graph — NO detach
             hidden_states_list.append(h)
         return fn
 
     def make_attn_hook(idx: int):
         def fn(module, inp, out):
-            # Attention module returns (context, attn_weights, ...) for
-            # BERT/RoBERTa when output_attentions=True.
-            # DistilBERT MultiHeadSelfAttention returns (context, attn_weights).
             if isinstance(out, tuple) and len(out) >= 2 and out[1] is not None:
-                attn_weights_list.append(out[1].detach())  # [1, H, seq, seq]
+                if out[1].dim() == 4:          # [1, H, seq, seq]
+                    attn_weights_list.append(out[1].detach())
         return fn
 
     for idx, layer in enumerate(encoder_layers):
@@ -168,7 +157,7 @@ def attcat_classification(
         if attn_mod is not None:
             hooks.append(attn_mod.register_forward_hook(make_attn_hook(idx)))
 
-    # -------------------------------------------------------------- forward
+    # ── forward pass ──────────────────────────────────────────────────────────
     with torch.enable_grad():
         outputs = model(input_ids=input_ids, attention_mask=attention_mask)
 
@@ -179,91 +168,92 @@ def attcat_classification(
     pred_class = int(logits.argmax(dim=-1).item())
     target     = logits[0, pred_class]   # scalar, still in graph
 
-    # Fallback hidden states (e.g. architecture not covered above)
-    if len(hidden_states_list) == 0:
-        if outputs.hidden_states is not None:
-            hidden_states_list = list(outputs.hidden_states[1:])
-        else:
-            raise RuntimeError("No hidden states captured.")
-
-    # Fallback attention weights
+    # fallbacks
+    if len(hidden_states_list) == 0 and outputs.hidden_states is not None:
+        hidden_states_list = list(outputs.hidden_states[1:])
     if len(attn_weights_list) == 0 and outputs.attentions is not None:
-        attn_weights_list = [
-            a.detach() for a in outputs.attentions if a is not None
-        ]
+        attn_weights_list = [a.detach() for a in outputs.attentions if a is not None]
 
     n_layers = len(hidden_states_list)
 
-    # --------------------------------------------------------- AttCAT scores
+    # ── AttCAT scores ─────────────────────────────────────────────────────────
     attcat_scores = torch.zeros(seq_len, device=device)
 
     for l_idx in range(n_layers):
-        h_l = hidden_states_list[l_idx]   # [1, seq, d] — IN GRAPH
+        h_l = hidden_states_list[l_idx]   # [1, seq, d] — in graph
 
         try:
             (grad_h_l,) = torch.autograd.grad(
                 target, h_l,
-                retain_graph=True,   # keep graph alive for remaining layers
+                retain_graph=True,
                 create_graph=False,
                 allow_unused=False,
             )
         except RuntimeError:
-            continue   # h_l not differentiable from target for this layer
-
+            continue
         if grad_h_l is None:
             continue
 
-        # CAT^l = grad ⊙ h  (no ReLU — preserve directionality per paper)
-        # Squeeze batch dim (always 1) to get clean [seq, d] tensors
-        cat_l = (grad_h_l * h_l.detach()).view(-1, grad_h_l.shape[-1])  # [seq, d]
+        # CAT^l = grad ⊙ h  (no ReLU — preserve directionality)
+        # Squeeze batch dim → [seq, d]
+        cat_l = (grad_h_l * h_l.detach()).squeeze(0)   # [seq, d]
 
-        # AttCAT^l_i = mean_H( sum_j alpha_{i,j} * cat_j^l )
         if l_idx < len(attn_weights_list):
-            alpha_l = attn_weights_list[l_idx].squeeze(0)  # [H, seq_q, seq_k]
-            # 'hij,jd->hid': for each head h, query i attends over keys j
-            attcat_l = torch.einsum(
-                "hij,jd->hid", alpha_l, cat_l
-            ).mean(dim=0)              # mean over heads -> [seq, d]
+            # alpha_l: [1, H, seq_q, seq_k] → squeeze → [H, seq_q, seq_k]
+            alpha_l = attn_weights_list[l_idx].squeeze(0)
+            # AttCAT^l_i = mean_H( sum_j alpha_{i,j} * cat_j )
+            # einsum 'hij,jd->hid': H heads, i queries, j keys, d hidden
+            attcat_l = torch.einsum("hij,jd->hid", alpha_l, cat_l).mean(dim=0)  # [seq, d]
         else:
-            attcat_l = cat_l           # plain CAT fallback
+            attcat_l = cat_l   # plain CAT fallback
 
         attcat_scores = attcat_scores + attcat_l.sum(dim=-1)   # [seq]
 
-    # ----------------------------------------------------------- token filter
+    # ── token filter ──────────────────────────────────────────────────────────
     tokens_raw = tokenizer.convert_ids_to_tokens(input_ids[0].tolist())
+    special_ids_set = set(tokenizer.all_special_ids)
 
     if show_special_tokens:
         tokens = tokens_raw
-        scores = attcat_scores
+        attr   = attcat_scores
     else:
-        special = {
-            tokenizer.cls_token, tokenizer.sep_token, tokenizer.pad_token,
-            "<s>", "</s>", "<pad>", None,
-        }
-        keep   = [t not in special for t in tokens_raw]
-        tokens = [t for t, k in zip(tokens_raw, keep) if k]
-        scores = attcat_scores[torch.tensor(keep, device=device).bool()]
+        keep   = [i for i, tid in enumerate(input_ids[0].tolist())
+                  if tid not in special_ids_set]
+        tokens = [tokens_raw[i] for i in keep]
+        attr   = attcat_scores[keep]
 
-    # ------------------------------------------------------- faithfulness metrics
-    _attr_np = scores.detach().cpu().numpy()
-    log_odd_val = log_odds(
-        sentence, _attr_np, tokens, pred_class, model, tokenizer, device
+    # ── metrics (identical call pattern to pace_gradients.py) ─────────────────
+    embed = model.get_input_embeddings()
+    with torch.no_grad():
+        X = embed(input_ids)   # [1, seq, d]
+
+    base_token_emb = get_base_token_emb(model, tokenizer, device)
+    inp = get_inputs(model, tokenizer, sentence, device)
+    _, _, _, _, position_embed, _, type_embed, _, _ = inp
+
+    attr_full = attcat_scores.detach()   # full-length (includes special tokens)
+
+    log_odd, _ = calculate_log_odds(
+        nn_forward_func, model, X, position_embed, type_embed,
+        attention_mask, base_token_emb, attr_full, topk=20
     )
-    comp_val = comprehensiveness(
-        sentence, _attr_np, tokens, pred_class, model, tokenizer, device
+    comp = calculate_comprehensiveness(
+        nn_forward_func, model, X, position_embed, type_embed,
+        attention_mask, base_token_emb, attr_full, topk=20
     )
-    suff_val = sufficiency(
-        sentence, _attr_np, tokens, pred_class, model, tokenizer, device
+    suff = calculate_sufficiency(
+        nn_forward_func, model, X, position_embed, type_embed,
+        attention_mask, base_token_emb, attr_full, topk=20
     )
 
     return {
         "tokens":       tokens,
-        "attributions": scores,
+        "attributions": attr.detach().cpu(),
         "pred_class":   pred_class,
-        "log_odd":      log_odd_val,
-        "comp":         comp_val,
-        "suff":         suff_val,
-        "time":         time.time() - t0,
+        "log_odd":      log_odd,
+        "comp":         comp,
+        "suff":         suff,
+        "time":         time.perf_counter() - t0,
     }
 
 
@@ -275,9 +265,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Evaluate AttCAT attributions on sentiment datasets."
     )
-    parser.add_argument("--model", type=str, default="distilbert",
+    parser.add_argument("--model",      type=str, default="distilbert",
                         choices=["distilbert", "bert", "roberta"])
-    parser.add_argument("--dataset", type=str, required=True,
+    parser.add_argument("--dataset",    type=str, required=True,
                         choices=["sst2", "imdb", "rotten"])
     parser.add_argument("--n_samples",  type=int, default=2000)
     parser.add_argument("--print_step", type=int, default=100)
@@ -307,7 +297,7 @@ if __name__ == "__main__":
     print(f"Dataset: {args.dataset}")
     print(f"Device : {device}")
 
-    # ---------------------------------------------------------------- demo
+    # ── demo ──────────────────────────────────────────────────────────────────
     demo_text = (
         "This is a really bad movie, although it has a promising start, "
         "it ended on a very low note."
@@ -319,8 +309,10 @@ if __name__ == "__main__":
     )
     for tok, val in zip(res_demo["tokens"], res_demo["attributions"]):
         print(f"  {tok:>15s} : {val.item():+.6f}")
+    print(f"  log_odd={res_demo['log_odd']:.4f}  "
+          f"comp={res_demo['comp']:.4f}  suff={res_demo['suff']:.4f}")
 
-    # --------------------------------------------------------------- dataset
+    # ── dataset ───────────────────────────────────────────────────────────────
     print("\nLoading dataset ...")
     if args.dataset == "imdb":
         ds   = load_dataset("imdb")["test"]
@@ -351,7 +343,8 @@ if __name__ == "__main__":
             suffs_sum      += res["suff"]
             total_time_sum += res["time"]
             count += 1
-        except Exception:
+        except Exception as e:
+            print(f"[WARN] skipped sample: {e}")
             continue
 
         if count % args.print_step == 0:
