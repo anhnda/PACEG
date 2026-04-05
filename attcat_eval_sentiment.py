@@ -245,19 +245,16 @@ def attcat_classification(
         scores = attcat_scores[torch.tensor(keep, device=device).bool()]
 
     # ------------------------------------------------------- faithfulness metrics
-    try:
-        _attr_np = scores.detach().cpu().numpy()
-        log_odd_val = log_odds(
-            sentence, _attr_np, tokens, pred_class, model, tokenizer, device
-        )
-        comp_val = comprehensiveness(
-            sentence, _attr_np, tokens, pred_class, model, tokenizer, device
-        )
-        suff_val = sufficiency(
-            sentence, _attr_np, tokens, pred_class, model, tokenizer, device
-        )
-    except Exception:
-        log_odd_val = comp_val = suff_val = 0.0
+    _attr_np = scores.detach().cpu().numpy()
+    log_odd_val = log_odds(
+        sentence, _attr_np, tokens, pred_class, model, tokenizer, device
+    )
+    comp_val = comprehensiveness(
+        sentence, _attr_np, tokens, pred_class, model, tokenizer, device
+    )
+    suff_val = sufficiency(
+        sentence, _attr_np, tokens, pred_class, model, tokenizer, device
+    )
 
     return {
         "tokens":       tokens,
