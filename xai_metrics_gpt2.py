@@ -107,13 +107,18 @@ def _soft_mask(
     Perturbed embedding [1, T, D] on CPU.
     """
     T    = attributions.shape[0]
-    amin = attributions.min()
-    amax = attributions.max()
+    # Use absolute values for normalisation.
+    # PACE IG attributions can be negative (tokens that suppress the
+    # prediction). Importance = magnitude, not sign.  Normalising raw
+    # values would map large negative scores to the wrong Bernoulli end.
+    abs_attr = attributions.abs()
+    amin = abs_attr.min()
+    amax = abs_attr.max()
 
     if (amax - amin).abs() < 1e-8:
         s = torch.full((T,), 0.5)
     else:
-        s = (attributions - amin) / (amax - amin)   # [T] in [0,1]
+        s = (abs_attr - amin) / (amax - amin)   # [T] in [0,1]
 
     # q_i = probability that token i is *kept* in the mask
     q = (1.0 - s) if mode == "comprehensiveness" else s  # [T]
@@ -272,7 +277,9 @@ def _log_odds_sequence(
     q_attrs = attributions[:q_len]                         # [Lq]
     k_count = max(1, int(len(q_attrs) * topk / 100))
 
-    _, top_idx    = torch.topk(q_attrs, k=k_count)
+    # topk by absolute value — IG scores can be negative;
+    # importance is magnitude, not sign.
+    _, top_idx    = torch.topk(q_attrs.abs(), k=k_count)
     embed_masked  = embed_orig.clone()
     embed_masked[0, top_idx, :] = 0.0
 
