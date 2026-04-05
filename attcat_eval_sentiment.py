@@ -202,20 +202,20 @@ def attcat_classification(
             continue
 
         # CAT^l = grad ⊙ h  (no ReLU — preserve directionality per paper)
-        cat_l = grad_h_l * h_l.detach()   # [1, seq, d]
+        # Squeeze batch dim (always 1) to get clean [seq, d] tensors
+        cat_l = (grad_h_l * h_l.detach()).view(-1, grad_h_l.shape[-1])  # [seq, d]
 
         # AttCAT^l_i = mean_H( sum_j alpha_{i,j} * cat_j^l )
         if l_idx < len(attn_weights_list):
-            alpha_l = attn_weights_list[l_idx]   # [1, H, seq_q, seq_k]
-            # einsum: query token i attends over key tokens j
-            # 'bhij, bjd -> bhid'  then mean over h
+            alpha_l = attn_weights_list[l_idx].squeeze(0)  # [H, seq_q, seq_k]
+            # 'hij,jd->hid': for each head h, query i attends over keys j
             attcat_l = torch.einsum(
-                "bhij,bjd->bhid", alpha_l, cat_l
-            ).mean(dim=1)              # [1, seq, d]
+                "hij,jd->hid", alpha_l, cat_l
+            ).mean(dim=0)              # mean over heads -> [seq, d]
         else:
-            attcat_l = cat_l           # plain CAT fallback, no attention
+            attcat_l = cat_l           # plain CAT fallback
 
-        attcat_scores = attcat_scores + attcat_l[0].sum(dim=-1)   # [seq]
+        attcat_scores = attcat_scores + attcat_l.sum(dim=-1)   # [seq]
 
     # ----------------------------------------------------------- token filter
     tokens_raw = tokenizer.convert_ids_to_tokens(input_ids[0].tolist())
