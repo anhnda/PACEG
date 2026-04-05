@@ -205,41 +205,37 @@ def _solve_barrier_scipy(
 ) -> np.ndarray:
     """
     Solve  min_{B^T f = 0}  c^T f − μ Σ [log(f_e) + log(u_e − f_e)]
-    using L-BFGS-B with the equality constraint eliminated via null-space.
-
-    The flow conservation constraint B_ext^T f = 0 has a null-space of
-    dimension  m+1 - rank(B_ext^T).  We parameterise f = N z + f0 where
-    N spans null(B_ext^T) and f0 is a particular feasible solution.
-
-    For efficiency we use scipy minimize with the bounds  0 < f < u  and
-    the equality constraint directly (method='SLSQP'), which handles sparse
-    constraints well for moderate problem sizes.
+    via SLSQP with log-barrier keeping flow strictly inside (0, u_e).
     """
-    m1 = len(u_e)
-    l_e = np.zeros(m1)
+    eps = 1e-8   # strict interior margin
 
-    # Initial point: midpoint (strictly feasible)
-    f0 = (l_e + u_e) / 2.0
+    # Drop edges where u_e ≤ 2*eps (no valid interior point exists)
+    valid = u_e > 2.0 * eps
+    if not np.all(valid):
+        u_e   = u_e[valid]
+        c_vec = c_vec[valid]
+        B_ext = B_ext[valid, :]   # select rows (edges)
+
+    m1  = len(u_e)
+    f0  = u_e / 2.0   # midpoint — strictly feasible
+
+    B_T = B_ext.T     # [Qtl × m1]
 
     def obj_and_grad(f):
-        d1 = f - l_e          # > 0
-        d2 = u_e - f          # > 0
-        # barrier:  -μ Σ [log(d1) + log(d2)]
+        d1   = f           # f > 0  (lower bound = 0)
+        d2   = u_e - f     # u - f > 0
         obj  = c_vec @ f - mu * (np.sum(np.log(d1)) + np.sum(np.log(d2)))
         grad = c_vec - mu * (1.0 / d1 - 1.0 / d2)
         return obj, grad
 
-    # Flow conservation as equality constraint: B_ext^T f = 0
-    # Use sparse matrix-vector product
-    B_T = B_ext.T  # [Qtl × (m+1)]
-
     constraints = {
         "type": "eq",
         "fun":  lambda f: B_T @ f,
-        "jac":  lambda f: B_T.toarray(),   # Qtl × (m+1) dense Jacobian
+        "jac":  lambda f: B_T.toarray(),
     }
 
-    bounds = [(1e-9, u - 1e-9) for u in u_e]
+    # Guaranteed valid: lb=eps < ub=u_e-eps because u_e > 2*eps
+    bounds = [(eps, float(u) - eps) for u in u_e]
 
     res = minimize(
         obj_and_grad,
@@ -251,7 +247,7 @@ def _solve_barrier_scipy(
         options={"maxiter": max_iter, "ftol": 1e-8, "disp": False},
     )
 
-    return res.x if res.success or res.status in (0, 8, 9) else f0
+    return res.x if (res.success or res.status in (0, 8, 9)) else f0
 
 
 def _solve_mcc_barrier(
@@ -274,8 +270,10 @@ def _solve_mcc_barrier(
     # Clip negatives (GF/AGF relu should already handle, but be safe)
     u_e = np.clip(u_e, 0.0, None)
 
-    # Remove zero-capacity edges (infeasible for log barrier)
-    mask    = u_e > 1e-12
+    # Remove edges whose capacity is too small for a strict interior point.
+    # Need u_e > 2*eps so that (eps, u-eps) is a valid bound interval.
+    eps_mask = 2e-7
+    mask    = u_e > eps_mask
     u_e_f   = u_e[mask]
     src_f   = topo["src"][mask]
     dst_f   = topo["dst"][mask]
@@ -304,14 +302,23 @@ def _solve_mcc_barrier(
     c_vec[-1]  = -1.0
 
     # ── solve ─────────────────────────────────────────────────────────────
+    # _solve_barrier_scipy may drop more edges internally (those with u≤2eps).
+    # We pass src_f alongside so we can reconstruct f_out correctly.
+    # Strategy: track which edges survive inside the solver by replicating
+    # the same valid mask here before calling.
+    eps_solver = 1e-8
+    solver_valid = u_ext > 2.0 * eps_solver
+    src_ext  = np.append(src_f, topo["st"])   # source of each edge incl. back
+    src_kept = src_ext[solver_valid]           # sources of edges the solver keeps
+
     f_val = _solve_barrier_scipy(u_ext, B_ext, c_vec, mu)
+    # f_val has length == sum(solver_valid)
 
     # ── outflow per node ──────────────────────────────────────────────────
     f_out = np.zeros(Qtl)
-    pos   = f_val[:-1]    # drop back-edge
-    for e, s in enumerate(src_f):
-        if pos[e] > 0:
-            f_out[s] += pos[e]
+    for e, s in enumerate(src_kept):
+        if e < len(f_val) and f_val[e] > 0:
+            f_out[s] += f_val[e]
 
     return f_out
 
