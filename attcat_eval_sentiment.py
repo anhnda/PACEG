@@ -135,8 +135,20 @@ def attcat_classification(
 
     def make_layer_hook(idx: int):
         def fn(module, inp, out):
-            # Layer output is a tuple (hidden_state, ...) or just hidden_state.
-            h = out[0] if isinstance(out, tuple) else out
+            # DistilBERT TransformerBlock returns a tuple whose elements can be:
+            #   (attn_weights [1,H,seq,seq],  ffn_output [1,seq,d])
+            # We want the 3-D hidden-state tensor, not the 4-D attention matrix.
+            # Strategy: pick the last element that is 3-D [B, seq, d].
+            if isinstance(out, tuple):
+                h = None
+                for t in reversed(out):
+                    if isinstance(t, torch.Tensor) and t.dim() == 3:
+                        h = t
+                        break
+                if h is None:          # fallback: first element
+                    h = out[0]
+            else:
+                h = out
             # *** Keep h in the computation graph — NO detach ***
             hidden_states_list.append(h)
         return fn
@@ -205,11 +217,6 @@ def attcat_classification(
         # Squeeze batch dim (always 1) to get clean [seq, d] tensors
         cat_l = (grad_h_l * h_l.detach()).view(-1, grad_h_l.shape[-1])  # [seq, d]
 
-        # DEBUG: print shapes to diagnose einsum mismatch
-        print(f"  [DEBUG] layer={l_idx}  grad_h_l={grad_h_l.shape}  h_l={h_l.shape}  cat_l={cat_l.shape}")
-        if l_idx < len(attn_weights_list):
-            print(f"  [DEBUG] attn_weights_list[{l_idx}]={attn_weights_list[l_idx].shape}  squeezed={attn_weights_list[l_idx].squeeze(0).shape}")
-
         # AttCAT^l_i = mean_H( sum_j alpha_{i,j} * cat_j^l )
         if l_idx < len(attn_weights_list):
             alpha_l = attn_weights_list[l_idx].squeeze(0)  # [H, seq_q, seq_k]
@@ -221,7 +228,6 @@ def attcat_classification(
             attcat_l = cat_l           # plain CAT fallback
 
         attcat_scores = attcat_scores + attcat_l.sum(dim=-1)   # [seq]
-        break  # DEBUG: only run one layer then stop
 
     # ----------------------------------------------------------- token filter
     tokens_raw = tokenizer.convert_ids_to_tokens(input_ids[0].tolist())
