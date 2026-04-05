@@ -1,44 +1,22 @@
 """
 run_eval_reagent_gpt2.py
 ========================
-Benchmark ReAGent attribution on decoder-only GPT-2 using the TellMeWhy
-dataset loaded from a local raw-text file.
+Benchmark ReAGent-style occlusion attribution on decoder-only GPT-2
+using the TellMeWhy dataset loaded from a local raw-text file.
 
-Mirrors run_eval_pg_gpt2.py exactly so that results (Soft-NC, Soft-NS,
-Log-odds) are directly comparable between PACE Gradient and ReAGent.
+Mirrors run_eval_pg_gpt2.py exactly so Soft-NC, Soft-NS, and Log-odds
+results are directly comparable between PACE Gradient and ReAGent.
 
 Dataset format  (datasets2/tellmewhy2.txt)
 ------------------------------------------
-One sample per line.  Format:
-
+One sample per line:
     <narrative sentences>  Why did <subject> <verb>?[<TAB><gold answer>]
-
-The full line (left of any tab) is used as the prompt Q.
-If --use_gold is set and a tab-separated answer exists it is used as A.
-
-Metrics  (xai_metrics_gpt2.py, same as PACE run)
--------------------------------------------------
-    Soft-NC  -- Soft Normalised Comprehensiveness  (Hellinger, Eq.15)
-    Soft-NS  -- Soft Normalised Sufficiency        (Hellinger, Eq.14)
-    Log-odds -- log-probability drop after hard top-k Q-token masking
 
 Usage
 -----
-    # Quick smoke test (gold answers, 20 samples, gpt2-small)
     python run_eval_reagent_gpt2.py --num_samples 20 --use_gold --verbose
-
-    # Full evaluation matching the PACE benchmark
-    python run_eval_reagent_gpt2.py \\
-        --model_name gpt2-medium \\
-        --num_samples 200 \\
-        --top_k 3 \\
-        --use_gold
-
-    # Custom paths
-    python run_eval_reagent_gpt2.py \\
-        --data_path /data/tellmewhy2.txt \\
-        --model_name ./model--gpt2 \\
-        --mlm_name  roberta-base
+    python run_eval_reagent_gpt2.py --model_name gpt2-medium --num_samples 200
+    python run_eval_reagent_gpt2.py --model_name ./model--gpt2 --use_gold
 """
 
 import random
@@ -49,7 +27,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from reagent_gpt2 import reagent_gpt2, get_model_tokenizer, _get_mlm
+from reagent_gpt2 import reagent_gpt2, get_model_tokenizer
 from xai_metrics_gpt2 import calculate_all_metrics_gpt2
 
 # ── reproducibility ──────────────────────────────────────────────────────────
@@ -59,25 +37,14 @@ torch.manual_seed(42)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Dataset loader  (local .txt — identical to run_eval_pg_gpt2.py)
+# Dataset loader  (identical to run_eval_pg_gpt2.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_tellmewhy_txt(path: str, num_samples: int, use_gold: bool) -> list:
     """
     Load TellMeWhy samples from the local plain-text file.
 
-    Each line is one sample:
-        "<narrative> Why did X?"  [TAB  "<gold answer>"]
-
-    Parameters
-    ----------
-    path        : path to datasets2/tellmewhy2.txt
-    num_samples : maximum number of samples to return
-    use_gold    : if True and a tab-separated answer exists, use it
-
-    Returns
-    -------
-    list of dicts:  {'question': str, 'gold_answer': str | None}
+    Each line:  "<narrative> Why did X?"  [TAB  "<gold answer>"]
     """
     samples = []
     with open(path, "r", encoding="utf-8") as fh:
@@ -107,33 +74,24 @@ def run_single_example(
     question:       str,
     gold_answer,
     model_name:     str,
-    mlm_name:       str,
     device:         str,
-    top_k:          int,
     topk:           int,
     max_new_tokens: int,
     n_samples:      int,
 ) -> dict:
     """
-    Full ReAGent pipeline for one TellMeWhy sample:
-        1. reagent_gpt2()           — importance scores via MLM oracle
+    Full ReAGent pipeline for one sample:
+        1. reagent_gpt2()               — occlusion importance scores
         2. calculate_all_metrics_gpt2() — Soft-NC, Soft-NS, Log-odds
-
-    Returns dict with soft_nc, soft_ns, log_odds, predicted_answer, time,
-    tokens, q_len, attributions  (same keys as run_eval_pg_gpt2.py).
     """
-    # ── ReAGent attribution ───────────────────────────────────────────────
     res = reagent_gpt2(
         question=question,
         model_name=model_name,
-        mlm_name=mlm_name,
         device=device,
-        top_k=top_k,
         max_new_tokens=max_new_tokens,
         gold_answer=gold_answer,
     )
 
-    # ── Faithfulness metrics ──────────────────────────────────────────────
     metrics = calculate_all_metrics_gpt2(
         model=res["model"],
         input_embed=res["input_embed"],
@@ -166,25 +124,20 @@ def run_benchmark(args) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     print("=" * 60)
-    print("ReAGent  |  GPT-2  |  TellMeWhy")
+    print("ReAGent (occlusion)  |  GPT-2  |  TellMeWhy")
     print("=" * 60)
     print(f"Device        : {device}")
-    print(f"GPT-2 model   : {args.model_name}")
-    print(f"MLM oracle    : {args.mlm_name}")
+    print(f"Model         : {args.model_name}")
     print(f"Dataset       : {args.data_path}")
     print(f"Samples       : {args.num_samples}")
-    print(f"top_k         : {args.top_k}  (MLM candidates per token)")
-    print(f"topk %        : {args.topk}   (metric ablation)")
+    print(f"topk %        : {args.topk}  (metric ablation)")
     print(f"Gold answer   : {args.use_gold}")
     print(f"MC samples    : {args.n_samples}")
     print("=" * 60)
 
-    # Pre-load both models once (cached)
-    print("\nLoading GPT-2 ...")
+    print("\nLoading model ...")
     get_model_tokenizer(args.model_name, device)
-    print("Loading RoBERTa MLM oracle ...")
-    _get_mlm(args.mlm_name, device)
-    print("Models loaded.\n")
+    print("Model loaded.\n")
 
     samples = load_tellmewhy_txt(
         args.data_path,
@@ -195,7 +148,6 @@ def run_benchmark(args) -> None:
         print("No samples found — check --data_path.")
         return
 
-    # Accumulators
     total_soft_nc  = 0.0
     total_soft_ns  = 0.0
     total_log_odds = 0.0
@@ -209,9 +161,7 @@ def run_benchmark(args) -> None:
                 question       = sample["question"],
                 gold_answer    = sample["gold_answer"],
                 model_name     = args.model_name,
-                mlm_name       = args.mlm_name,
                 device         = device,
-                top_k          = args.top_k,
                 topk           = args.topk,
                 max_new_tokens = args.max_new_tokens,
                 n_samples      = args.n_samples,
@@ -238,7 +188,6 @@ def run_benchmark(args) -> None:
                 traceback.print_exc()
             continue
 
-    # ── Final summary ─────────────────────────────────────────────────────
     print("\n" + "=" * 60)
     print("FINAL RESULTS  —  ReAGent / GPT-2 / TellMeWhy")
     print("=" * 60)
@@ -255,7 +204,7 @@ def run_benchmark(args) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Printing helpers  (identical style to run_eval_pg_gpt2.py)
+# Printing helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _print_running(count, total, snc, sns, lo, t):
@@ -275,8 +224,10 @@ def _print_sample(question: str, res: dict):
     print(f"Q : {question[:120]}")
     print(f"A : {res['predicted_answer']}")
 
-    q_scores = list(zip(tokens[:q_len], scores[:q_len]))
-    q_scores.sort(key=lambda x: x[1], reverse=True)
+    q_scores = sorted(
+        zip(tokens[:q_len], scores[:q_len]),
+        key=lambda x: x[1], reverse=True
+    )
     print("Top-5 Q tokens by ReAGent attribution:")
     for tok, sc in q_scores[:5]:
         print(f"    {tok!r:20s}  {sc:.4f}")
@@ -306,16 +257,8 @@ if __name__ == "__main__":
         help="GPT-2 variant or local path: gpt2 | gpt2-medium | ./model--gpt2"
     )
     parser.add_argument(
-        "--mlm_name", type=str, default="roberta-base",
-        help="RoBERTa MLM oracle (default: roberta-base)"
-    )
-    parser.add_argument(
         "--num_samples", type=int, default=200,
         help="Max samples to evaluate (default: 200)"
-    )
-    parser.add_argument(
-        "--top_k", type=int, default=3,
-        help="MLM replacement candidates per token (paper default: 3)"
     )
     parser.add_argument(
         "--topk", type=int, default=20,
