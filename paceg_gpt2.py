@@ -92,11 +92,14 @@ def pace_gradient_gpt2(
     model, tokenizer = get_model_tokenizer(model_name, device)
 
     # ------------------------------------------------------------------
-    # 1. Tokenise Q
+    # 1. Tokenise Q -- always build an explicit attention_mask.
+    #    GPT-2 sets pad_token = eos_token, so HuggingFace cannot infer
+    #    the mask automatically and emits a warning without it.
     # ------------------------------------------------------------------
-    q_enc = tokenizer(question, return_tensors="pt", add_special_tokens=True)
-    q_ids = q_enc["input_ids"].to(device)          # [1, Lq]
-    q_len = q_ids.shape[1]
+    q_enc       = tokenizer(question, return_tensors="pt", add_special_tokens=True)
+    q_ids       = q_enc["input_ids"].to(device)        # [1, Lq]
+    q_attn_mask = q_enc["attention_mask"].to(device)   # [1, Lq]  all-ones
+    q_len       = q_ids.shape[1]
 
     # ------------------------------------------------------------------
     # 2. Get answer token ids -- generate or use gold
@@ -105,16 +108,17 @@ def pace_gradient_gpt2(
         # add_special_tokens=False avoids a spurious leading BOS token
         a_enc    = tokenizer(gold_answer, return_tensors="pt",
                              add_special_tokens=False)
-        a_ids_d  = a_enc["input_ids"].to(device)   # [1, La]
-        full_ids = torch.cat([q_ids, a_ids_d], dim=1)   # [1, Lq+La]
+        a_ids_d  = a_enc["input_ids"].to(device)       # [1, La]
+        full_ids = torch.cat([q_ids, a_ids_d], dim=1)  # [1, Lq+La]
     else:
         with torch.no_grad():
             full_ids = model.generate(
                 q_ids,
+                attention_mask=q_attn_mask,            # suppresses the warning
                 max_new_tokens=max_new_tokens,
-                do_sample=False,                   # greedy -> deterministic
+                do_sample=False,                       # greedy -> deterministic
                 pad_token_id=tokenizer.eos_token_id,
-            )                                      # [1, Lq+La]
+            )                                          # [1, Lq+La]
 
     T  = full_ids.shape[1]
     La = T - q_len
