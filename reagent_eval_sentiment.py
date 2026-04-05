@@ -107,19 +107,14 @@ except ImportError:
 _clf_cache = _attcat_cache   # same object, not a copy
 
 # ── Separate cache only for the MLM oracle ────────────────────────────────
-# roberta-base is ReAGent-specific and not used by AttCAT/PACE.
-# This WILL trigger a one-time download if roberta-base is not yet in
-# ~/.cache/huggingface/hub. After the first download it loads from disk only.
+# MLM cache: keyed by model_name (same checkpoint as the classifier).
+# AutoModelForMaskedLM reads from the same local cache — no extra download.
 _mlm_cache: dict = {}
 
-# MLM oracle: reuse backbone already cached for the classifier.
-# bert->bert-base-uncased, distilbert->distilbert-base-uncased,
-# roberta->clf checkpoint itself (IS a masked LM, clf head ignored).
-_BACKBONE_MLM = {
-    "bert":       "bert-base-uncased",
-    "distilbert": "distilbert-base-uncased",
-    "roberta":    None,
-}
+# MLM oracle = the classifier checkpoint itself.
+# AutoModelForMaskedLM reads the same cached files as AutoModelForSequenceClassification
+# and simply ignores the classification head — zero extra download,
+# identical to how AttCAT/PACE reuse the same model_name.
 
 MODEL_NAMES = {
     ("distilbert", "sst2"):   "distilbert-base-uncased-finetuned-sst-2-english",
@@ -135,10 +130,8 @@ MODEL_NAMES = {
 
 
 def _resolve_mlm_name(model_family: str, clf_model_name: str) -> str:
-    backbone = _BACKBONE_MLM.get(model_family)
-    if backbone is None:
-        return clf_model_name  # roberta: clf checkpoint IS the MLM
-    return backbone
+    # Always the classifier checkpoint itself — no separate download ever.
+    return clf_model_name
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -448,7 +441,7 @@ def reagent_classification(
                              Original paper uses top_k=3 (config: top3_replace0.1).
         topk_pct:            Percentage of tokens to ablate for eval metrics.
         mlm_name:            MLM oracle for generating replacements.
-                             Defaults to "roberta-base" (same as original).
+                             Defaults to the classifier checkpoint itself (no extra download).
         show_special_tokens: Whether to include [CLS]/[SEP] in output.
         device:              Torch device; auto-detected if None.
 
@@ -464,16 +457,9 @@ def reagent_classification(
 
     t0 = time.perf_counter()
 
-    # ── Resolve MLM oracle name ──
+    # ── MLM oracle = classifier checkpoint itself (zero extra download) ──
     if mlm_name is None:
-        if "roberta" in model_name.lower():
-            mlm_name = _resolve_mlm_name("roberta", model_name)
-        elif "distilbert" in model_name.lower():
-            mlm_name = _resolve_mlm_name("distilbert", model_name)
-        elif "bert" in model_name.lower():
-            mlm_name = _resolve_mlm_name("bert", model_name)
-        else:
-            mlm_name = _resolve_mlm_name("bert", model_name)  # safe default
+        mlm_name = model_name
 
     # ── Load models ──
     clf_tokenizer, clf_model = _load_clf(model_name, device)
