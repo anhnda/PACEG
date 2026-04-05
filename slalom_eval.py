@@ -147,30 +147,47 @@ def slalom_explain_and_eval(
     # res: list of tuples (token_str, value_array, imp_array)
     # value/imp are per-class vectors shape (num_labels,) — take class 1 (positive)
     # or take the difference [1] - [0] for a signed attribution
+    t0 = time.perf_counter()
+    res = slalom_explainer.tokenize_and_explain(text)
+    t1 = time.perf_counter()
+
+    # Debug — remove after confirming
+    # print(f"tuple len={len(res[0])}, res[0]={res[0]}")
+
+    # res: list of (token_str, scores_array)
+    # scores_array shape: (num_modes, num_labels) or (num_labels,)
+    # With modes=["value","imp"]: scores_array[0]=value, scores_array[1]=imp
     tokens_out = [r[0] for r in res]
+    scores     = [np.array(r[1], dtype=np.float32) for r in res]
 
     def _to_scalar(x):
-        """Convert a per-class vector to a single ranking score."""
-        x = np.array(x, dtype=np.float32)
-        if x.ndim == 0:
-            return float(x)
-        elif x.shape[0] == 1:
-            return float(x[0])
-        else:
-            # binary: score = class1 - class0  (positive = favors positive class)
-            return float(x[1] - x[0])
+        """Collapse per-class vector to signed scalar (class1 - class0)."""
+        if x.ndim == 0 or x.shape[0] == 1:
+            return float(x.flat[0])
+        return float(x[1] - x[0])   # binary: positive favors class 1
 
-    values = np.array([_to_scalar(r[1]) for r in res], dtype=np.float32)
-    imps   = np.array([_to_scalar(r[2]) for r in res], dtype=np.float32)
+    # scores[i] may be shape (num_modes, num_labels) or (num_labels,)
+    scores0 = scores[0]
+    if scores0.ndim == 2:
+        # shape (num_modes, num_labels): row 0=value, row 1=imp
+        values = np.array([_to_scalar(s[0]) for s in scores], dtype=np.float32)
+        imps   = np.array([_to_scalar(s[1]) for s in scores], dtype=np.float32)
+    elif scores0.ndim == 1 and scores0.shape[0] == 2 and len(res[0]) == 2:
+        # only one mode returned — treat as value, set imp=0
+        values = np.array([_to_scalar(s) for s in scores], dtype=np.float32)
+        imps   = np.zeros_like(values)
+    else:
+        # scalar per token
+        values = np.array([float(s) for s in scores], dtype=np.float32)
+        imps   = np.zeros_like(values)
 
-    # ── Attribution tensor for metric ranking ──────────────────────────
+    # ── Attribution tensor ─────────────────────────────────────────────
     if attr_mode == "value":
         attr = torch.tensor(values)
     elif attr_mode == "imp":
         attr = torch.tensor(imps)
     else:  # "lin"
-        lin  = values * np.exp(imps)
-        attr = torch.tensor(lin)
+        attr = torch.tensor(values * np.exp(imps))
 
     # rest of the function unchanged from here ...
     enc = tokenizer(
