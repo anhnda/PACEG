@@ -15,24 +15,23 @@ AttCAT Algorithm (per token i, summed over all L layers):
                                                 (attention-weighted CAT)
   3. score_i  = sum_l  sum_d  AttCAT_i^l        (scalar per token)
 
-where:
-  h_i^l    : hidden state of token i at layer l  [d]
-  grad(h)  : gradient of predicted-class logit w.r.t. h
-  alpha_i^l: attention weights of token i at layer l  [n_heads, n_tokens]
+Key implementation note
+-----------------------
+h^l must stay IN the computation graph (no .detach()) so that
+torch.autograd.grad(logit_c, h_l) actually returns non-zero gradients.
+Attention weights can be safely detached (they are data, not differentiated).
 """
 
-import json
 import time
 import tqdm
 import torch
 import random
 import argparse
 import numpy as np
-import torch.nn.functional as F
 from typing import Dict, List, Tuple
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from datasets import load_dataset
-from xai_metrics import *   # log_odds, comprehensiveness, sufficiency helpers
+from xai_metrics import *   # log_odds, comprehensiveness, sufficiency
 
 random.seed(42)
 np.random.seed(42)
@@ -61,6 +60,30 @@ def _load_model(model_name: str, device: str):
 
 
 # ---------------------------------------------------------------------------
+# Architecture helpers
+# ---------------------------------------------------------------------------
+
+def _get_encoder_layers(model):
+    """Return the list of transformer encoder layer modules."""
+    if hasattr(model, "bert"):
+        return list(model.bert.encoder.layer)
+    if hasattr(model, "distilbert"):
+        return list(model.distilbert.transformer.layer)
+    if hasattr(model, "roberta"):
+        return list(model.roberta.encoder.layer)
+    raise RuntimeError("Unsupported model architecture.")
+
+
+def _get_attn_submodule(layer):
+    """Return the self-attention sub-module of a transformer layer."""
+    if hasattr(layer, "attention"):
+        return layer.attention
+    if hasattr(layer, "self_attn"):
+        return layer.self_attn
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Core AttCAT computation
 # ---------------------------------------------------------------------------
 
@@ -73,217 +96,143 @@ def attcat_classification(
     """
     Compute AttCAT token attributions for a single sentence.
 
+    Strategy
+    --------
+    1. Register forward hooks that capture:
+       - h^l : the encoder-layer output TENSOR kept IN the computation graph
+               (absolutely no .detach() here — that was the bug)
+       - alpha^l : attention weights (detached, used only as scalar weights)
+    2. Single forward pass with torch.enable_grad().
+    3. For each layer l:
+         grad_h_l = torch.autograd.grad(logit_c, h_l, retain_graph=True)[0]
+         cat_l    = grad_h_l * h_l.detach()       # [1, seq, d]
+         attcat_l = einsum(alpha_l, cat_l)         # [1, seq, d]
+         scores  += attcat_l[0].sum(-1)            # accumulate [seq]
+
     Returns
     -------
-    dict with keys:
-        tokens        : list[str]   – tokens (special tokens optionally excluded)
-        attributions  : Tensor      – per-token AttCAT scalar score
-        pred_class    : int         – predicted class index
-        log_odd       : float       – log-odds faithfulness metric
-        comp          : float       – comprehensiveness
-        suff          : float       – sufficiency
-        time          : float       – wall-clock seconds
+    dict with keys: tokens, attributions, pred_class, log_odd, comp, suff, time
     """
     t0 = time.time()
     tokenizer, model = _load_model(model_name, device)
 
-    # ------------------------------------------------------------------ encode
     encoding = tokenizer(
         sentence,
         return_tensors="pt",
         truncation=True,
         max_length=512,
     )
-    input_ids = encoding["input_ids"].to(device)           # [1, seq]
+    input_ids      = encoding["input_ids"].to(device)
     attention_mask = encoding["attention_mask"].to(device)
+    seq_len        = input_ids.shape[1]
 
-    # ------------------------------------------------------- forward + hooks
-    # We need hidden states at every encoder layer AND attention weights.
-    # We collect them via register_forward_hook so we can call backward later.
-
-    hidden_states_list: List[torch.Tensor] = []   # one per layer, [1, seq, d]
-    attn_weights_list: List[torch.Tensor] = []    # one per layer, [1, H, seq, seq]
-
+    # ---------------------------------------------------------------- hooks
+    hidden_states_list: List[torch.Tensor] = []   # in-graph [1, seq, d]
+    attn_weights_list:  List[torch.Tensor] = []   # detached  [1, H, seq, seq]
     hooks = []
 
-    # Detect architecture-specific layer attribute
-    if hasattr(model, "bert"):
-        encoder_layers = model.bert.encoder.layer
-        layer_attr = "output"           # BertLayer output attribute name
-    elif hasattr(model, "distilbert"):
-        encoder_layers = model.distilbert.transformer.layer
-        layer_attr = "output"
-    elif hasattr(model, "roberta"):
-        encoder_layers = model.roberta.encoder.layer
-        layer_attr = "output"
-    else:
-        # Generic fallback: rely solely on model output hidden_states
-        encoder_layers = []
-        layer_attr = None
+    encoder_layers = _get_encoder_layers(model)
 
-    # ----------------------------------- register hooks on each encoder layer
-    def make_hook(layer_idx: int):
-        def hook_fn(module, inp, out):
-            # out is a tuple; first element is the hidden state tensor
+    def make_layer_hook(idx: int):
+        def fn(module, inp, out):
+            # Layer output is a tuple (hidden_state, ...) or just hidden_state.
             h = out[0] if isinstance(out, tuple) else out
-            h = h.detach().clone().requires_grad_(True)
+            # *** Keep h in the computation graph — NO detach ***
             hidden_states_list.append(h)
-        return hook_fn
+        return fn
 
-    def make_attn_hook(layer_idx: int):
-        def hook_fn(module, inp, out):
-            # attention module output: (context, attn_weights) or just context
-            if isinstance(out, tuple) and len(out) >= 2:
-                attn_w = out[1]          # [1, H, seq, seq]
-                if attn_w is not None:
-                    attn_weights_list.append(attn_w.detach().clone())
-        return hook_fn
+    def make_attn_hook(idx: int):
+        def fn(module, inp, out):
+            # Attention module returns (context, attn_weights, ...) for
+            # BERT/RoBERTa when output_attentions=True.
+            # DistilBERT MultiHeadSelfAttention returns (context, attn_weights).
+            if isinstance(out, tuple) and len(out) >= 2 and out[1] is not None:
+                attn_weights_list.append(out[1].detach())  # [1, H, seq, seq]
+        return fn
 
-    # --------------------------------------------------------- hook attachment
-    # We hook the full transformer layer output to get hidden states, and
-    # the self-attention sub-module to get attention weights.
     for idx, layer in enumerate(encoder_layers):
-        hooks.append(layer.register_forward_hook(make_hook(idx)))
-        # Locate the self-attention sub-module
-        if hasattr(layer, "attention"):
-            attn_module = layer.attention
-        elif hasattr(layer, "self_attn"):
-            attn_module = layer.self_attn
-        elif hasattr(layer, "multihead_attn"):
-            attn_module = layer.multihead_attn
-        else:
-            attn_module = None
-        if attn_module is not None:
-            hooks.append(attn_module.register_forward_hook(make_attn_hook(idx)))
+        hooks.append(layer.register_forward_hook(make_layer_hook(idx)))
+        attn_mod = _get_attn_submodule(layer)
+        if attn_mod is not None:
+            hooks.append(attn_mod.register_forward_hook(make_attn_hook(idx)))
 
-    # ------------------------------------------------------------- forward pass
+    # -------------------------------------------------------------- forward
     with torch.enable_grad():
-        outputs = model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-        )
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask)
 
     for h in hooks:
         h.remove()
 
-    logits = outputs.logits            # [1, num_classes]
-    pred_class = logits.argmax(dim=-1).item()
+    logits     = outputs.logits
+    pred_class = int(logits.argmax(dim=-1).item())
+    target     = logits[0, pred_class]   # scalar, still in graph
 
-    # --------------------------------------------------- fallback hidden states
-    # If hooks captured nothing (unusual arch), use model output hidden_states
-    if len(hidden_states_list) == 0 and outputs.hidden_states is not None:
-        # hidden_states[0] is embedding layer, [1:] are transformer layers
-        for hs in outputs.hidden_states[1:]:
-            h_req = hs.detach().clone().requires_grad_(True)
-            hidden_states_list.append(h_req)
+    # Fallback hidden states (e.g. architecture not covered above)
+    if len(hidden_states_list) == 0:
+        if outputs.hidden_states is not None:
+            hidden_states_list = list(outputs.hidden_states[1:])
+        else:
+            raise RuntimeError("No hidden states captured.")
 
-    # ---------------------------------------------------- fallback attention
+    # Fallback attention weights
     if len(attn_weights_list) == 0 and outputs.attentions is not None:
-        for aw in outputs.attentions:
-            if aw is not None:
-                attn_weights_list.append(aw.detach().clone())
+        attn_weights_list = [
+            a.detach() for a in outputs.attentions if a is not None
+        ]
 
     n_layers = len(hidden_states_list)
-    seq_len  = input_ids.shape[1]
 
-    # ------------------------------------------------ compute gradients per layer
-    # For each layer hidden state h^l, compute grad(logit_c) w.r.t. h^l.
-    # We perform separate backward passes (retain_graph) for efficiency.
-    # AttCAT_i^l = mean_H( alpha_i^l  @  (grad_h^l ⊙ h^l) )  summed over d
-
-    attcat_scores = torch.zeros(seq_len, device=device)  # [seq]
-
-    target_logit = logits[0, pred_class]   # scalar
+    # --------------------------------------------------------- AttCAT scores
+    attcat_scores = torch.zeros(seq_len, device=device)
 
     for l_idx in range(n_layers):
-        h_l = hidden_states_list[l_idx]   # [1, seq, d]
-        h_l.requires_grad_(True)
+        h_l = hidden_states_list[l_idx]   # [1, seq, d] — IN GRAPH
 
-        # Re-run only the classification head with this layer's hidden state
-        # to get a clean gradient signal. We use the [CLS] token output.
-        # For most BERT-style classifiers: logit = classifier(h_l[:, 0, :])
-        # We approximate: gradient of original logit w.r.t. h_l.
-        # Since h_l is a leaf (detached), we need to route through the head.
         try:
-            # Try to pass through the classifier head
-            if hasattr(model, "classifier"):
-                cls_out = h_l[:, 0, :]         # [1, d]  CLS token
-                # Handle dropout gracefully
-                model.eval()
-                with torch.enable_grad():
-                    logit_l = model.classifier(cls_out)   # [1, num_classes]
-                    score_l = logit_l[0, pred_class]
-                    score_l.backward(retain_graph=(l_idx < n_layers - 1))
-            elif hasattr(model, "pre_classifier"):
-                # DistilBERT-style: pre_classifier → relu → dropout → classifier
-                cls_out = h_l[:, 0, :]
-                model.eval()
-                with torch.enable_grad():
-                    x = model.pre_classifier(cls_out)
-                    x = torch.relu(x)
-                    logit_l = model.classifier(x)
-                    score_l = logit_l[0, pred_class]
-                    score_l.backward(retain_graph=(l_idx < n_layers - 1))
-            else:
-                # Fallback: use the top-level logit gradient approximation
-                target_logit.backward(retain_graph=True)
-                if h_l.grad is None:
-                    attcat_scores += 0.0
-                    continue
-        except Exception:
-            # If anything fails, skip this layer
+            (grad_h_l,) = torch.autograd.grad(
+                target, h_l,
+                retain_graph=True,   # keep graph alive for remaining layers
+                create_graph=False,
+                allow_unused=False,
+            )
+        except RuntimeError:
+            continue   # h_l not differentiable from target for this layer
+
+        if grad_h_l is None:
             continue
 
-        grad_h_l = h_l.grad.clone()   # [1, seq, d]
-
-        # CAT^l_i = grad ⊙ h  (no ReLU – we want directionality)
+        # CAT^l = grad ⊙ h  (no ReLU — preserve directionality per paper)
         cat_l = grad_h_l * h_l.detach()   # [1, seq, d]
 
-        # AttCAT^l_i = mean_H( alpha^l_i · CAT^l )
-        # alpha^l has shape [1, H, seq, seq]
-        # alpha^l_i is row i of attention: [1, H, seq]
-        # We weight each token j's CAT by alpha_{i,j}, sum over j → [1, H, d]
-        # then mean over H → [1, d], sum over d → scalar per token i
-
+        # AttCAT^l_i = mean_H( sum_j alpha_{i,j} * cat_j^l )
         if l_idx < len(attn_weights_list):
-            alpha_l = attn_weights_list[l_idx]   # [1, H, seq, seq]
-            # alpha_l[:, :, i, :] is the attention of token i over all tokens
-            # Weighted sum: sum_j alpha_{i,j} * cat_j^l
-            # = einsum('bhij, bjd -> bhid') ... sum over j
-            # cat_l: [1, seq, d] → [1, 1, seq, d]
-            cat_l_exp = cat_l.unsqueeze(1)                   # [1, 1, seq, d]
-            alpha_l_exp = alpha_l.unsqueeze(-1)              # [1, H, seq, seq, 1]
-            # weighted_j = alpha[i,j] * cat[j]: sum over j
-            # weighted_i: [1, H, seq, d]
-            weighted = (alpha_l_exp * cat_l_exp.unsqueeze(2)).sum(dim=3)
-            # mean over heads → [1, seq, d]
-            attcat_l = weighted.mean(dim=1)
+            alpha_l = attn_weights_list[l_idx]   # [1, H, seq_q, seq_k]
+            # einsum: query token i attends over key tokens j
+            # 'bhij, bjd -> bhid'  then mean over h
+            attcat_l = torch.einsum(
+                "bhij,bjd->bhid", alpha_l, cat_l
+            ).mean(dim=1)              # [1, seq, d]
         else:
-            # No attention weights available – fall back to plain CAT
-            attcat_l = cat_l   # [1, seq, d]
+            attcat_l = cat_l           # plain CAT fallback, no attention
 
-        # Sum over hidden dimension → [seq]
-        attcat_scores += attcat_l[0].sum(dim=-1)
+        attcat_scores = attcat_scores + attcat_l[0].sum(dim=-1)   # [seq]
 
-        # Zero gradient for next iteration
-        if h_l.grad is not None:
-            h_l.grad.zero_()
-
-    # ------------------------------------------- token decoding
+    # ----------------------------------------------------------- token filter
     tokens_raw = tokenizer.convert_ids_to_tokens(input_ids[0].tolist())
 
     if show_special_tokens:
         tokens = tokens_raw
         scores = attcat_scores
     else:
-        special = {tokenizer.cls_token, tokenizer.sep_token,
-                   tokenizer.pad_token, "<s>", "</s>", "<pad>"}
-        mask = [tok not in special for tok in tokens_raw]
-        tokens = [t for t, m in zip(tokens_raw, mask) if m]
-        scores = attcat_scores[[m for m in mask]]
+        special = {
+            tokenizer.cls_token, tokenizer.sep_token, tokenizer.pad_token,
+            "<s>", "</s>", "<pad>", None,
+        }
+        keep   = [t not in special for t in tokens_raw]
+        tokens = [t for t, k in zip(tokens_raw, keep) if k]
+        scores = attcat_scores[torch.tensor(keep, device=device).bool()]
 
-    # ------------------------------------------- faithfulness metrics
-    # Re-use the helpers from xai_metrics (same interface as PACE eval)
+    # ------------------------------------------------------- faithfulness metrics
     try:
         _attr_np = scores.detach().cpu().numpy()
         log_odd_val = log_odds(
@@ -298,8 +247,6 @@ def attcat_classification(
     except Exception:
         log_odd_val = comp_val = suff_val = 0.0
 
-    elapsed = time.time() - t0
-
     return {
         "tokens":       tokens,
         "attributions": scores,
@@ -307,33 +254,25 @@ def attcat_classification(
         "log_odd":      log_odd_val,
         "comp":         comp_val,
         "suff":         suff_val,
-        "time":         elapsed,
+        "time":         time.time() - t0,
     }
 
 
 # ---------------------------------------------------------------------------
-# Main evaluation loop
+# Main
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Evaluate AttCAT attributions on sentiment datasets."
     )
-    parser.add_argument("--model",   type=str, default="distilbert",
-                        choices=["distilbert", "bert", "roberta"],
-                        help="Backbone model family")
+    parser.add_argument("--model", type=str, default="distilbert",
+                        choices=["distilbert", "bert", "roberta"])
     parser.add_argument("--dataset", type=str, required=True,
-                        choices=["sst2", "imdb", "rotten"],
-                        help="Evaluation dataset")
-    parser.add_argument("--n_samples", type=int, default=2000,
-                        help="Number of random samples (for imdb/rotten)")
-    parser.add_argument("--print_step", type=int, default=100,
-                        help="Print running averages every N samples")
+                        choices=["sst2", "imdb", "rotten"])
+    parser.add_argument("--n_samples",  type=int, default=2000)
+    parser.add_argument("--print_step", type=int, default=100)
     args = parser.parse_args()
-
-    # -------------------------------------------------- model name resolution
-    model_key     = args.model
-    dataset_name  = args.dataset
 
     MODEL_MAP = {
         "distilbert": {
@@ -352,14 +291,14 @@ if __name__ == "__main__":
             "rotten": "textattack/roberta-base-rotten-tomatoes",
         },
     }
-    model_name = MODEL_MAP[model_key][dataset_name]
+    model_name = MODEL_MAP[args.model][args.dataset]
+    device     = "cuda" if torch.cuda.is_available() else "cpu"
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Model    : {model_name}")
-    print(f"Dataset  : {dataset_name}")
-    print(f"Device   : {device}")
+    print(f"Model  : {model_name}")
+    print(f"Dataset: {args.dataset}")
+    print(f"Device : {device}")
 
-    # -------------------------------------------------- quick sanity check
+    # ---------------------------------------------------------------- demo
     demo_text = (
         "This is a really bad movie, although it has a promising start, "
         "it ended on a very low note."
@@ -372,28 +311,24 @@ if __name__ == "__main__":
     for tok, val in zip(res_demo["tokens"], res_demo["attributions"]):
         print(f"  {tok:>15s} : {val.item():+.6f}")
 
-    # -------------------------------------------------- load dataset
+    # --------------------------------------------------------------- dataset
     print("\nLoading dataset ...")
-    if dataset_name == "imdb":
+    if args.dataset == "imdb":
         ds   = load_dataset("imdb")["test"]
         data = list(zip(ds["text"], ds["label"]))
         data = random.sample(data, min(args.n_samples, len(data)))
-
-    elif dataset_name == "sst2":
-        ds   = load_dataset("glue", "sst2")["validation"]   # test has no labels
+    elif args.dataset == "sst2":
+        ds   = load_dataset("glue", "sst2")["validation"]
         data = list(zip(ds["sentence"], ds["label"], ds["idx"]))
-
-    elif dataset_name == "rotten":
+    elif args.dataset == "rotten":
         ds   = load_dataset("rotten_tomatoes")["test"]
         data = list(zip(ds["text"], ds["label"]))
         data = random.sample(data, min(args.n_samples, len(data)))
 
-    # -------------------------------------------------- evaluation loop
     print(f"Evaluating {len(data)} samples with AttCAT ...\n")
 
     log_odds_sum = comps_sum = suffs_sum = total_time_sum = 0.0
     count = 0
-    print_step = args.print_step
 
     for row in tqdm.tqdm(data):
         text = row[0]
@@ -402,16 +337,15 @@ if __name__ == "__main__":
                 text, model_name=model_name,
                 show_special_tokens=False, device=device,
             )
-            log_odds_sum  += res["log_odd"]
-            comps_sum     += res["comp"]
-            suffs_sum     += res["suff"]
+            log_odds_sum   += res["log_odd"]
+            comps_sum      += res["comp"]
+            suffs_sum      += res["suff"]
             total_time_sum += res["time"]
             count += 1
-        except Exception as e:
-            # Skip problematic samples silently
+        except Exception:
             continue
 
-        if count % print_step == 0:
+        if count % args.print_step == 0:
             print(
                 f"[{count:>5d}]  "
                 f"Log-odds: {log_odds_sum / count:.4f}  "
@@ -421,10 +355,11 @@ if __name__ == "__main__":
             )
 
     print("\n=== Final Results ===")
+    n = max(count, 1)
     print(
-        f"Log-odds      : {log_odds_sum / max(count,1):.4f}\n"
-        f"Comprehensiveness: {comps_sum / max(count,1):.4f}\n"
-        f"Sufficiency   : {suffs_sum / max(count,1):.4f}\n"
-        f"Time/sample   : {total_time_sum / max(count,1):.4f}s\n"
-        f"Total samples : {count}"
+        f"Log-odds         : {log_odds_sum / n:.4f}\n"
+        f"Comprehensiveness: {comps_sum / n:.4f}\n"
+        f"Sufficiency      : {suffs_sum / n:.4f}\n"
+        f"Time/sample      : {total_time_sum / n:.4f}s\n"
+        f"Total samples    : {count}"
     )
