@@ -298,7 +298,7 @@ def _log_odds_sequence(
         lo_total = lo_total + (p_mask.log() - p_full.log())
 
     n = len(answer_positions)
-    return lo_total / n if n > 0 else torch.tensor(0.0)
+    return - torch.abs(lo_total / n )
 
 
 # ============================================================
