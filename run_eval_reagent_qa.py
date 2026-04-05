@@ -302,6 +302,9 @@ def reagent_qa(
     end_idx     = int(p_end_orig.argmax().item())
     start_logit = p_start_orig[start_idx].item()
     end_logit   = p_end_orig[end_idx].item()
+    # Keep as scalar Tensors for xai_metrics (torch.log requires Tensor input)
+    start_prob_tensor = p_start_orig[start_idx].detach()
+    end_prob_tensor   = p_end_orig[end_idx].detach()
 
     predicted_answer = qa_tokenizer.decode(
         input_ids[0, start_idx: end_idx + 1], skip_special_tokens=True
@@ -351,8 +354,8 @@ def reagent_qa(
         "end_idx":             end_idx,
         "start_logit":         start_logit,
         "end_logit":           end_logit,
-        "start_prob":          start_logit,
-        "end_prob":            end_logit,
+        "start_prob":          start_prob_tensor,   # Tensor — required by xai_metrics
+        "end_prob":            end_prob_tensor,     # Tensor — required by xai_metrics
         # tensors for xai_metrics
         "model":               qa_model,
         "input_embed":         input_embed,
