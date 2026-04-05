@@ -416,19 +416,30 @@ def _compute_faithfulness_metrics(
     #                 position_emb, ref_position_emb, type_emb, ref_type_emb, attention_mask)
     _, _, _, _, position_embed, _, type_embed, _, _ = inp
 
-    attr_full = torch.tensor(importance, dtype=torch.float32, device=device)
+    # All tensors passed to xai_metrics must be on the same device.
+    # attr_full drives the topk() call inside xai_metrics which produces
+    # index tensors; attention_mask is then indexed by those indices.
+    # If attr_full is on CUDA but attention_mask is on CPU → RuntimeError.
+    # Solution: move everything to CPU, matching how xai_metrics was written
+    # (it builds the mask tensor internally without an explicit .to(device)).
+    attr_full        = torch.tensor(importance, dtype=torch.float32)   # CPU
+    attention_mask_c = attention_mask.cpu()
+    X_c              = X.cpu()
+    position_embed_c = position_embed.cpu() if position_embed is not None else None
+    type_embed_c     = type_embed.cpu()     if type_embed     is not None else None
+    base_token_emb_c = base_token_emb.cpu()
 
     log_odd, _ = calculate_log_odds(
-        nn_forward_func, clf_model, X, position_embed, type_embed,
-        attention_mask, base_token_emb, attr_full, topk=topk_pct,
+        nn_forward_func, clf_model, X_c, position_embed_c, type_embed_c,
+        attention_mask_c, base_token_emb_c, attr_full, topk=topk_pct,
     )
     comp = calculate_comprehensiveness(
-        nn_forward_func, clf_model, X, position_embed, type_embed,
-        attention_mask, base_token_emb, attr_full, topk=topk_pct,
+        nn_forward_func, clf_model, X_c, position_embed_c, type_embed_c,
+        attention_mask_c, base_token_emb_c, attr_full, topk=topk_pct,
     )
     suff = calculate_sufficiency(
-        nn_forward_func, clf_model, X, position_embed, type_embed,
-        attention_mask, base_token_emb, attr_full, topk=topk_pct,
+        nn_forward_func, clf_model, X_c, position_embed_c, type_embed_c,
+        attention_mask_c, base_token_emb_c, attr_full, topk=topk_pct,
     )
 
     return log_odd, comp, suff, pred_id
