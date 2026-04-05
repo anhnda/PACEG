@@ -142,14 +142,33 @@ def slalom_explain_and_eval(
 
     # ── Extract attribution tensor for ranking ─────────────────────────
     # ── Attribution tensor for metric ranking ──────────────────────────
+
+
+    # res: list of tuples (token_str, value_array, imp_array)
+    # value/imp are per-class vectors shape (num_labels,) — take class 1 (positive)
+    # or take the difference [1] - [0] for a signed attribution
     tokens_out = [r[0] for r in res]
-    values     = np.array([r[1] for r in res], dtype=np.float32)
-    imps       = np.zeros_like(values)   # no imp available
+
+    def _to_scalar(x):
+        """Convert a per-class vector to a single ranking score."""
+        x = np.array(x, dtype=np.float32)
+        if x.ndim == 0:
+            return float(x)
+        elif x.shape[0] == 1:
+            return float(x[0])
+        else:
+            # binary: score = class1 - class0  (positive = favors positive class)
+            return float(x[1] - x[0])
+
+    values = np.array([_to_scalar(r[1]) for r in res], dtype=np.float32)
+    imps   = np.array([_to_scalar(r[2]) for r in res], dtype=np.float32)
+
+    # ── Attribution tensor for metric ranking ──────────────────────────
     if attr_mode == "value":
         attr = torch.tensor(values)
     elif attr_mode == "imp":
         attr = torch.tensor(imps)
-    else:  # "lin" — linearized SLALOM score: v * exp(s), Section B.7
+    else:  # "lin"
         lin  = values * np.exp(imps)
         attr = torch.tensor(lin)
 
@@ -259,8 +278,8 @@ def run_benchmark(args):
                 topk=args.topk,
                 attr_mode=args.attr_mode,
             )
-            print(res[0])  # see what a single element looks like
-            total_log_odd += res["log_odd"]
+            print(res[0])        # full tuple
+            print(type(res[0][1]), res[0][1])   # what value actually is            total_log_odd += res["log_odd"]
             total_comp    += res["comp"]
             total_suff    += res["suff"]
             total_time    += res["time"]
