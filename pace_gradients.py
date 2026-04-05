@@ -278,18 +278,16 @@ def pace_gradient_qa(
     }
 
 def pace_gradient_classification(
-    sentence : str,
+    sentence: str,
     a: float = 0.0,
     b: float = 1.0,
-    steps: int = 101,
-    model_name: str = "deepset/bert-base-cased-squad2",
+    steps: int = 100,
+    model_name: str = "distilbert-base-uncased-finetuned-sst-2-english",
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     show_special_tokens: bool = False,
 ) -> Dict[str, Any]:
-    """
-    Compute PACE (Prediction-Aware Consistency-Enhanced Gated Gradients) attributions for Sequence Classification.
-    """
     global cache
+
     if "distilbert" in model_name:
         from distilbert_helper import get_inputs, get_base_token_emb, nn_forward_func
     elif "roberta" in model_name:
@@ -298,185 +296,127 @@ def pace_gradient_classification(
         from bert_helper import get_inputs, get_base_token_emb, nn_forward_func
     else:
         raise NotImplementedError(f"Model {model_name} not implemented")
-    if cache.get(model_name, None) is None:
-        print(f"Model {model_name} not found in cache, loading from stratch")
-        tmp = {}
+
+    if cache.get(model_name) is None:
         tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
         model = AutoModelForSequenceClassification.from_pretrained(model_name).to(device)
-        tmp["model"] = model
-        tmp["tokenizer"] = tokenizer
-        cache[model_name] = tmp
-    else:
-        tokenizer = cache[model_name]["tokenizer"]
-        model = cache[model_name]["model"]
-    model.to(device)
+        cache[model_name] = {"model": model, "tokenizer": tokenizer}
+
+    tokenizer = cache[model_name]["tokenizer"]
+    model = cache[model_name]["model"]
     model.eval()
 
     enc = tokenizer(sentence, return_tensors="pt", truncation=True, return_special_tokens_mask=True)
     enc = {k: v.to(device) for k, v in enc.items()}
-    input_ids = enc["input_ids"].to(device)           # (1, L)
-    attention_mask = enc["attention_mask"].to(device) # (1, L)
+    input_ids = enc["input_ids"]
+    attention_mask = enc["attention_mask"]
     token_type_ids = enc.get("token_type_ids", None)
-    if token_type_ids is not None:
-        token_type_ids = token_type_ids.to(device)
 
     fwd_params = inspect.signature(model.forward).parameters
     extra_kwargs = {}
     if "token_type_ids" in fwd_params and token_type_ids is not None:
         extra_kwargs["token_type_ids"] = token_type_ids
-    
-    # Base embeddings X: (1, L, d)
+
     embed = model.get_input_embeddings()
     with torch.no_grad():
         X = embed(input_ids)  # (1, L, d)
-        final_logits = model(inputs_embeds=X, attention_mask=attention_mask).logits[0]
-    pred_id = int(final_logits.argmax(dim=-1).item())
+
     L, d = X.shape[1], X.shape[2]
-    start_time = time.perf_counter()
-    
 
-    # Integration grid
+    # --- Baseline: mask embedding repeated for all positions ---
+    mask_token_id = tokenizer.mask_token_id or tokenizer.pad_token_id
+    mask_tensor = torch.tensor([[mask_token_id]], device=device)
+    with torch.no_grad():
+        mask_emb = embed(mask_tensor)           # (1, 1, d)
+    X_baseline = mask_emb.expand(1, L, d)      # (1, L, d)
+
+    # Fixed positions (CLS, SEP, PAD) — interpolation coef stays 1
+    ids = input_ids[0]
+    special_ids_set = set(tokenizer.all_special_ids)
+    fixed = torch.tensor([tid in special_ids_set for tid in ids.tolist()],
+                         device=device, dtype=torch.bool)  # (L,)
+
+    # --- Get predicted label once ---
+    with torch.no_grad():
+        logits0 = model(inputs_embeds=X, attention_mask=attention_mask, **extra_kwargs).logits[0]
+    pred_id = int(logits0.argmax().item())
+
+    # === BATCHED integration ===
+    # t_vals: (steps,)
     t_vals = torch.linspace(a, b, steps, device=device, dtype=X.dtype)
-    dt = float((b - a) / max(1, steps - 1)) if steps > 1 else float(b - a)
-    # Accumulator
-    attr = torch.zeros(L, device=device, dtype=X.dtype)
-    ones_L = torch.ones(L, device=device, dtype=X.dtype)
-    direct = X.squeeze()
-    pre_score = None
-    target_score = None
-    EXPLORATION = 1000 # Higher for more exploration
-    attrs = []
-    db_scores = []
-    
-    out = model(
-        inputs_embeds=X,
-        attention_mask=attention_mask,
-        **extra_kwargs
-    )
-    logits = out.logits[0]  # (num_labels,)
-    probs = F.softmax(logits, dim=-1)
-    target_prelogit = logits[pred_id]
-    target_prob = probs[pred_id]
-    ts = []
-    n_base = L*3
-    ps = 0.9
-    p_sample = torch.full((L,1), ps).to(device)
-    prev_lb_score = None
-    prev_lg_score = None
-    mask_token = tokenizer.mask_token
-    mask_token_id = tokenizer.mask_token_id
 
-    mask_token_tensor = torch.tensor([[mask_token_id]], device=device)
-    mask_embedding = model.get_input_embeddings()(mask_token_tensor.clone().contiguous())
-    X_RefMask = mask_embedding.repeat(1,L,1)
-    def func(x):
-        iterpolated = x.tile((1,d))
-        padding_mask = torch.full((L,1), 1).to(device)
-        padding_mask[0] = 0
-        padding_mask[-1] = 0
+    # coefs: (steps, L) — fixed positions always get 1.0
+    coefs_base = t_vals.unsqueeze(1).expand(steps, L).clone()  # (steps, L)
+    coefs_base[:, fixed] = 1.0
 
-        iterpolated[0,:] = 1
-        iterpolated[-1,:] = 1
+    # coefs as leaf with grad: (steps, L)
+    coefs = coefs_base.detach().requires_grad_(True)
 
-        X_Ref = X_RefMask
+    # Expand to embedding dim: (steps, L, d)
+    coefs_exp = coefs.unsqueeze(-1).expand(steps, L, d)
 
-        X_inter = X * iterpolated  + X_Ref * (1-iterpolated)
-        eps = torch.zeros((1,L,1), device=device, dtype=X.dtype).requires_grad_(True)
-        X_inter = X_inter + eps * padding_mask
-    
-        out = model(
-            inputs_embeds=X_inter,
-            attention_mask=attention_mask,
-            **extra_kwargs
-        )
-        logits = out.logits[0]
-        probs = F.softmax(logits, dim=-1)
-        logit_score = logits[pred_id]
-        label_score = probs[pred_id]
-        return logit_score
+    # X_inter: (steps, L, d)  — broadcast X and X_baseline
+    X_inter = X.squeeze(0) * coefs_exp + X_baseline.squeeze(0) * (1 - coefs_exp)
+
+    # Reshape for model: (steps, L, d) → run as batch of `steps` sequences
+    # Expand attention_mask to (steps, L)
+    attn_batch = attention_mask.expand(steps, -1)
+    extra_kwargs_batch = {}
+    if "token_type_ids" in extra_kwargs:
+        extra_kwargs_batch["token_type_ids"] = extra_kwargs["token_type_ids"].expand(steps, -1)
+
     start_time = time.perf_counter()
-    for m in range(1):
-        sum_dlg = 0
-        for i in range(len(t_vals)):
-            # ε(t) = t * 1_L  -> (L,)
-            ones_L_rand = torch.ones(L).to(device)
-            t = t_vals[i]
-            ts.append(t.item())
-    
-            inteprolate_v = t * ones_L_rand
-            itepolated_o = inteprolate_v.view(L,1)
-            ex = torch.zeros((L,1), device=device, dtype=X.dtype).requires_grad_(True)
-            itepolated_o = itepolated_o + ex
-            iterpolated = itepolated_o.tile((1,d))
 
+    out = model(inputs_embeds=X_inter, attention_mask=attn_batch, **extra_kwargs_batch)
+    logits_batch = out.logits[:, pred_id]  # (steps,)
+    probs_batch   = F.softmax(out.logits, dim=-1)[:, pred_id]  # (steps,)
 
-      
-            padding_mask = torch.full((L,1), 1).to(device)
-            padding_mask[0] = 0
-            padding_mask[-1] = 0
+    # PACE deltas: score[i] - score[i-1], with score[-1] = score[0] (so delta[0]=0)
+    score_for_delta = logits_batch
+    delta = score_for_delta - torch.cat([score_for_delta[:1], score_for_delta[:-1]])  # (steps,)
 
-            iterpolated[0,:] = 1
-            iterpolated[-1,:] = 1
+    # Gradient of sum(logits_batch) w.r.t. coefs — shape (steps, L)
+    # We need grad per step, so use diagonal trick: sum over steps weighted by delta
+    # grad of logits_batch[i] w.r.t. coefs[i] — backprop through the batch jointly
+    grad_sum = torch.autograd.grad(logits_batch.sum(), coefs)[0]  # (steps, L)
+    # This gives ∂(Σ_i logit_i)/∂coef_ij = ∂logit_i/∂coef_ij (cross terms are 0 for independent rows)
 
+    # Normalize each step's gradient, then weight by delta
+    grad_norm = grad_sum / (grad_sum.sum(dim=1, keepdim=True) + 1e-10)  # (steps, L)
+    attr = (grad_norm * delta.unsqueeze(1)).sum(dim=0)  # (L,)
 
-            X_Ref = X_RefMask
-
-            X_inter = X * iterpolated  + X_Ref * (1-iterpolated)
-            eps = torch.zeros((1,L,1), device=device, dtype=X.dtype).requires_grad_(True)
-            X_inter = X_inter + eps * padding_mask
-        
-            out = model(
-                inputs_embeds=X_inter,
-                attention_mask=attention_mask,
-                **extra_kwargs
-            )
-            logits = out.logits[0]  # (num_labels,)
-
-            probs = F.softmax(logits, dim=-1)
-            logit_score = logits[pred_id]
-            label_score = probs[pred_id]
-            dscore = target_prob - label_score
-            if i == 0:
-                prev_label_score = label_score
-                prev_lg_score = logit_score
-            dlogit = logit_score - prev_lg_score    
-            dlb = label_score - prev_label_score
-            prev_label_score = label_score
-            prev_lg_score = logit_score
-            # ∂score/∂ε  (L,)
-            (grad_eps,) = torch.autograd.grad(logit_score, itepolated_o, retain_graph=False, create_graph=False)
-            grad_eps_n = grad_eps
-            grad_eps_n = grad_eps / (torch.sum(grad_eps) + 1e-10)
-            grad_eps_n = grad_eps_n.squeeze()
-
-            db_scores.append((label_score.detach().cpu().numpy(), logit_score.detach().cpu().numpy(), dlb.detach().cpu().numpy(), t.item()))
-            # accumulate ∫ grad_ε · dε, with dε = 1_L * dt
-            attri = grad_eps_n * dlogit
-            sum_dlg += dlb
-            attrs.append(attri)
-            attr += attri
     end_time = time.perf_counter()
-    tokens = tokenizer.convert_ids_to_tokens(input_ids[0])
+
+    # --- Metrics: reuse X, attention_mask from above (no get_inputs re-call) ---
     base_token_emb = get_base_token_emb(model, tokenizer, device)
     inp = get_inputs(model, tokenizer, sentence, device)
-    input_ids, ref_input_ids, input_embed, ref_input_embed, position_embed, ref_position_embed, type_embed, ref_type_embed, attention_mask = inp
-    log_odd, pred = calculate_log_odds(nn_forward_func, model, X, position_embed, type_embed, attention_mask, base_token_emb, attr, topk=20)
-    comp = calculate_comprehensiveness(nn_forward_func, model, X, position_embed, type_embed, attention_mask, base_token_emb, attr, topk=20)
-    suff = calculate_sufficiency(nn_forward_func, model, X, position_embed, type_embed, attention_mask, base_token_emb, attr, topk=20)
+    _, _, _, _, position_embed, _, type_embed, _, attn_for_metrics = inp
+
+    log_odd, pred_label = calculate_log_odds(
+        nn_forward_func, model, X, position_embed, type_embed,
+        attention_mask, base_token_emb, attr.detach(), topk=20
+    )
+    comp = calculate_comprehensiveness(
+        nn_forward_func, model, X, position_embed, type_embed,
+        attention_mask, base_token_emb, attr.detach(), topk=20
+    )
+    suff = calculate_sufficiency(
+        nn_forward_func, model, X, position_embed, type_embed,
+        attention_mask, base_token_emb, attr.detach(), topk=20
+    )
+
+    tokens = tokenizer.convert_ids_to_tokens(input_ids[0])
     if not show_special_tokens:
-        special_ids = set(tokenizer.all_special_ids)
-        keep_idx = [i for i, tid in enumerate(input_ids[0].tolist()) if tid not in special_ids]
+        keep_idx = [i for i, tid in enumerate(input_ids[0].tolist()) if tid not in special_ids_set]
         tokens = [tokens[i] for i in keep_idx]
         attr = attr[keep_idx]
+
     return {
-        "tokens": tokens, 
-        "attributions": attr.detach().cpu(), 
-        "attributions_steps": attrs, 
-        "db_scores": db_scores, 
-        "ts": ts,
+        "tokens": tokens,
+        "attributions": attr.detach().cpu(),
         "time": end_time - start_time,
         "log_odd": log_odd,
         "comp": comp,
         "suff": suff,
-        "predicted_label": pred_id
-    }  
+        "predicted_label": pred_id,
+    }
