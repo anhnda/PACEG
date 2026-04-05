@@ -5,7 +5,7 @@ This script evaluates the PACE Gradient attribution method on the SQuADv2 datase
 computing XAI metrics: log-odds, comprehensiveness, and sufficiency.
 
 Usage:
-    python run_eval_pg_qa.py --model_name deepset/bert-base-cased-squad2 --num_samples 1000 --steps 101
+    python run_eval_pg_qa.py --model_name cleandata/bert-finetuned-squad --num_samples 1000 --steps 101
     python run_eval_pg_qa.py --demo  # Run demo with a few examples
 """
 
