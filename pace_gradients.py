@@ -303,14 +303,17 @@ def pace_gradient_classification(
         cache[model_name] = {"model": model, "tokenizer": tokenizer}
 
     tokenizer = cache[model_name]["tokenizer"]
-    model = cache[model_name]["model"]
+    model     = cache[model_name]["model"]
     model.eval()
 
-    enc = tokenizer(sentence, return_tensors="pt", truncation=True, return_special_tokens_mask=True)
-    enc = {k: v.to(device) for k, v in enc.items()}
-    input_ids = enc["input_ids"]
+    enc = tokenizer(sentence, return_tensors="pt", truncation=True,
+                    return_special_tokens_mask=True)
+    enc           = {k: v.to(device) for k, v in enc.items()}
+    input_ids     = enc["input_ids"]
     attention_mask = enc["attention_mask"]
     token_type_ids = enc.get("token_type_ids", None)
+    if token_type_ids is not None:
+        token_type_ids = token_type_ids.to(device)
 
     fwd_params = inspect.signature(model.forward).parameters
     extra_kwargs = {}
@@ -323,74 +326,86 @@ def pace_gradient_classification(
 
     L, d = X.shape[1], X.shape[2]
 
-    # --- Baseline: mask embedding repeated for all positions ---
+    # Baseline — identical to original
     mask_token_id = tokenizer.mask_token_id or tokenizer.pad_token_id
-    mask_tensor = torch.tensor([[mask_token_id]], device=device)
+    mask_tensor   = torch.tensor([[mask_token_id]], device=device)
     with torch.no_grad():
-        mask_emb = embed(mask_tensor)           # (1, 1, d)
-    X_baseline = mask_emb.expand(1, L, d)      # (1, L, d)
+        mask_embedding = embed(mask_tensor)        # (1, 1, d)
+    X_RefMask = mask_embedding.repeat(1, L, 1)    # (1, L, d)
 
-    # Fixed positions (CLS, SEP, PAD) — interpolation coef stays 1
-    ids = input_ids[0]
-    special_ids_set = set(tokenizer.all_special_ids)
-    fixed = torch.tensor([tid in special_ids_set for tid in ids.tolist()],
-                         device=device, dtype=torch.bool)  # (L,)
-
-    # --- Get predicted label once ---
+    # Predicted label
     with torch.no_grad():
-        logits0 = model(inputs_embeds=X, attention_mask=attention_mask, **extra_kwargs).logits[0]
+        logits0 = model(inputs_embeds=X, attention_mask=attention_mask,
+                        **extra_kwargs).logits[0]
     pred_id = int(logits0.argmax().item())
+    target_prob = F.softmax(logits0, dim=-1)[pred_id]
 
-    # === BATCHED integration ===
-    # t_vals: (steps,)
-    t_vals = torch.linspace(a, b, steps, device=device, dtype=X.dtype)
+    # Integration grid
+    t_vals = torch.linspace(a, b, steps, device=device, dtype=X.dtype)  # (steps,)
 
-    # coefs: (steps, L) — fixed positions always get 1.0
+    # ── Build batched interpolation, replicating the original's `ex` trick ──
+    #
+    # Original per step:
+    #   itepolated_o = t * ones_L  →  shape (L, 1)
+    #   ex = zeros((L,1), requires_grad=True)
+    #   itepolated_o = itepolated_o + ex          ← ex is the grad leaf
+    #   iterpolated  = itepolated_o.tile((1, d))  ← actual copies, not view
+    #   fixed[0] = fixed[-1] = 1
+    #   X_inter = X * iterpolated + X_Ref * (1 - iterpolated)
+    #   grad wrt itepolated_o (= wrt ex since ex is the leaf and grad flows through +)
+
+    # Batched equivalent:
+    #   coefs_base: (steps, L) — t broadcast over tokens, fixed positions = 1
+    #   ex:         (steps, L, 1) — zero leaf, replaces the per-step ex
+    #   itepolated_o = coefs_base.unsqueeze(-1) + ex     (steps, L, 1)
+    #   iterpolated  = itepolated_o.tile((1, 1, d))      (steps, L, d) — actual copies
+    #   X_inter = X * iterpolated + X_Ref * (1 - iterpolated)
+    #   grad wrt ex → (steps, L, 1) → squeeze → (steps, L)
+
     coefs_base = t_vals.unsqueeze(1).expand(steps, L).clone()  # (steps, L)
-    coefs_base[:, fixed] = 1.0
+    # Fix first and last token (CLS / SEP) — identical to original's hardcoded [0] and [-1]
+    coefs_base[:, 0]  = 1.0
+    coefs_base[:, -1] = 1.0
 
-    # coefs as leaf with grad: (steps, L)
-    coefs = coefs_base.detach().requires_grad_(True)
+    ex = torch.zeros(steps, L, 1, device=device, dtype=X.dtype, requires_grad=True)  # leaf
 
-    # Expand to embedding dim: (steps, L, d)
-    coefs_exp = coefs.unsqueeze(-1).expand(steps, L, d)
+    itepolated_o = coefs_base.unsqueeze(-1) + ex          # (steps, L, 1)  — mirrors original
+    iterpolated  = itepolated_o.tile((1, 1, d))           # (steps, L, d)  — actual copies
 
-    # X_inter: (steps, L, d)  — broadcast X and X_baseline
-    X_inter = X.squeeze(0) * coefs_exp + X_baseline.squeeze(0) * (1 - coefs_exp)
+    X_inter = (X.squeeze(0) * iterpolated
+               + X_RefMask.squeeze(0) * (1 - iterpolated))  # (steps, L, d)
 
-    # Reshape for model: (steps, L, d) → run as batch of `steps` sequences
-    # Expand attention_mask to (steps, L)
-    attn_batch = attention_mask.expand(steps, -1)
-    extra_kwargs_batch = {}
+    attn_batch = attention_mask.expand(steps, -1)           # (steps, L)
+    extra_batch = {}
     if "token_type_ids" in extra_kwargs:
-        extra_kwargs_batch["token_type_ids"] = extra_kwargs["token_type_ids"].expand(steps, -1)
+        extra_batch["token_type_ids"] = extra_kwargs["token_type_ids"].expand(steps, -1)
 
     start_time = time.perf_counter()
 
-    out = model(inputs_embeds=X_inter, attention_mask=attn_batch, **extra_kwargs_batch)
-    logits_batch = out.logits[:, pred_id]  # (steps,)
-    probs_batch   = F.softmax(out.logits, dim=-1)[:, pred_id]  # (steps,)
+    out          = model(inputs_embeds=X_inter, attention_mask=attn_batch, **extra_batch)
+    logits_batch = out.logits[:, pred_id]                   # (steps,)
 
-    # PACE deltas: score[i] - score[i-1], with score[-1] = score[0] (so delta[0]=0)
-    score_for_delta = logits_batch
-    delta = score_for_delta - torch.cat([score_for_delta[:1], score_for_delta[:-1]])  # (steps,)
+    # delta[i] = logit[i] - logit[i-1],  delta[0] = 0  (mirrors original's if i==0 branch)
+    delta = logits_batch - torch.cat([logits_batch[:1], logits_batch[:-1]])  # (steps,)
+    delta[0] = 0.0   # explicit, matches original: attri[0] = grad * 0
 
-    # Gradient of sum(logits_batch) w.r.t. coefs — shape (steps, L)
-    # We need grad per step, so use diagonal trick: sum over steps weighted by delta
-    # grad of logits_batch[i] w.r.t. coefs[i] — backprop through the batch jointly
-    grad_sum = torch.autograd.grad(logits_batch.sum(), coefs)[0]  # (steps, L)
-    # This gives ∂(Σ_i logit_i)/∂coef_ij = ∂logit_i/∂coef_ij (cross terms are 0 for independent rows)
+    # Grad w.r.t. ex: (steps, L, 1) — cross-step independence holds because
+    # ex[i] only appears in X_inter[i], so ∂logit[i]/∂ex[j] = 0 for j≠i
+    (grad_ex,) = torch.autograd.grad(logits_batch.sum(), ex)  # (steps, L, 1)
+    grad_ex = grad_ex.squeeze(-1)                              # (steps, L)
 
-    # Normalize each step's gradient, then weight by delta
-    grad_norm = grad_sum / (grad_sum.sum(dim=1, keepdim=True) + 1e-10)  # (steps, L)
+    # Normalize per step — identical to original's grad_eps_n
+    grad_norm = grad_ex / (grad_ex.sum(dim=1, keepdim=True) + 1e-10)  # (steps, L)
+
+    # Weighted sum — mirrors original's `attr += grad_eps_n * dlogit`
     attr = (grad_norm * delta.unsqueeze(1)).sum(dim=0)  # (L,)
 
     end_time = time.perf_counter()
 
-    # --- Metrics: reuse X, attention_mask from above (no get_inputs re-call) ---
+    # Metrics — unchanged from original
     base_token_emb = get_base_token_emb(model, tokenizer, device)
     inp = get_inputs(model, tokenizer, sentence, device)
-    _, _, _, _, position_embed, _, type_embed, _, attn_for_metrics = inp
+    _, _, _, _, position_embed, _, type_embed, _, _ = inp
 
     log_odd, pred_label = calculate_log_odds(
         nn_forward_func, model, X, position_embed, type_embed,
@@ -406,17 +421,19 @@ def pace_gradient_classification(
     )
 
     tokens = tokenizer.convert_ids_to_tokens(input_ids[0])
+    special_ids_set = set(tokenizer.all_special_ids)
     if not show_special_tokens:
-        keep_idx = [i for i, tid in enumerate(input_ids[0].tolist()) if tid not in special_ids_set]
+        keep_idx = [i for i, tid in enumerate(input_ids[0].tolist())
+                    if tid not in special_ids_set]
         tokens = [tokens[i] for i in keep_idx]
-        attr = attr[keep_idx]
+        attr   = attr[keep_idx]
 
     return {
-        "tokens": tokens,
-        "attributions": attr.detach().cpu(),
-        "time": end_time - start_time,
-        "log_odd": log_odd,
-        "comp": comp,
-        "suff": suff,
+        "tokens":          tokens,
+        "attributions":    attr.detach().cpu(),
+        "time":            end_time - start_time,
+        "log_odd":         log_odd,
+        "comp":            comp,
+        "suff":            suff,
         "predicted_label": pred_id,
     }
