@@ -107,18 +107,16 @@ def _soft_mask(
     Perturbed embedding [1, T, D] on CPU.
     """
     T    = attributions.shape[0]
-    # Use absolute values for normalisation.
-    # PACE IG attributions can be negative (tokens that suppress the
-    # prediction). Importance = magnitude, not sign.  Normalising raw
-    # values would map large negative scores to the wrong Bernoulli end.
-    abs_attr = attributions.abs()
-    amin = abs_attr.min()
-    amax = abs_attr.max()
+    # PACE IG attributions are L2-norms — always >= 0.
+    # ReAGent occlusion scores are Hellinger distances — always >= 0.
+    # Simple min-max normalisation is correct for both.
+    amin = attributions.min()
+    amax = attributions.max()
 
     if (amax - amin).abs() < 1e-8:
         s = torch.full((T,), 0.5)
     else:
-        s = (abs_attr - amin) / (amax - amin)   # [T] in [0,1]
+        s = (attributions - amin) / (amax - amin)   # [T] in [0,1]
 
     # q_i = probability that token i is *kept* in the mask
     q = (1.0 - s) if mode == "comprehensiveness" else s  # [T]
@@ -277,9 +275,9 @@ def _log_odds_sequence(
     q_attrs = attributions[:q_len]                         # [Lq]
     k_count = max(1, int(len(q_attrs) * topk / 100))
 
-    # topk by absolute value — IG scores can be negative;
-    # importance is magnitude, not sign.
-    _, top_idx    = torch.topk(q_attrs.abs(), k=k_count)
+    # topk by value — both PACE (L2-norm) and ReAGent (Hellinger)
+    # scores are always >= 0, so this is correct as-is.
+    _, top_idx    = torch.topk(q_attrs, k=k_count)
     embed_masked  = embed_orig.clone()
     embed_masked[0, top_idx, :] = 0.0
 
@@ -293,7 +291,11 @@ def _log_odds_sequence(
         p_full = P_full[tok_id].clamp(min=1e-9)
         p_mask = P_mask[tok_id].clamp(min=1e-9)
 
-        lo_total = lo_total + (p_full.log() - p_mask.log())
+        # Standard convention (matches BERT PACE / AttCAT xai_metrics.py):
+        #   log_odds = log p(a_t | masked) - log p(a_t | full)
+        #   NEGATIVE = masking hurt prediction = those tokens were important = GOOD
+        #   POSITIVE = masking helped = tokens were suppressive = BAD attribution
+        lo_total = lo_total + (p_mask.log() - p_full.log())
 
     n = len(answer_positions)
     return lo_total / n if n > 0 else torch.tensor(0.0)
