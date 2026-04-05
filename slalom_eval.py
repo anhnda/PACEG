@@ -157,29 +157,28 @@ def slalom_explain_and_eval(
     # res: list of (token_str, scores_array)
     # scores_array shape: (num_modes, num_labels) or (num_labels,)
     # With modes=["value","imp"]: scores_array[0]=value, scores_array[1]=imp
-    tokens_out = [r[0] for r in res]
-    scores     = [np.array(r[1], dtype=np.float32) for r in res]
+    tokens_out = res["tokens"]                                    # list of str
+    values     = np.array(res["value"], dtype=np.float32)        # (L, num_labels) or (L,)
+    imps       = np.array(res["imp"],   dtype=np.float32)
 
-    def _to_scalar(x):
-        """Collapse per-class vector to signed scalar (class1 - class0)."""
-        if x.ndim == 0 or x.shape[0] == 1:
-            return float(x.flat[0])
-        return float(x[1] - x[0])   # binary: positive favors class 1
+    def _to_scalar_array(x):
+        """(L, num_labels) → (L,) signed scalar per token."""
+        if x.ndim == 1:
+            return x                          # already scalar per token
+        elif x.shape[1] == 1:
+            return x[:, 0]
+        else:
+            return x[:, 1] - x[:, 0]         # binary: class1 - class0
 
-    # scores[i] may be shape (num_modes, num_labels) or (num_labels,)
-    scores0 = scores[0]
-    if scores0.ndim == 2:
-        # shape (num_modes, num_labels): row 0=value, row 1=imp
-        values = np.array([_to_scalar(s[0]) for s in scores], dtype=np.float32)
-        imps   = np.array([_to_scalar(s[1]) for s in scores], dtype=np.float32)
-    elif scores0.ndim == 1 and scores0.shape[0] == 2 and len(res[0]) == 2:
-        # only one mode returned — treat as value, set imp=0
-        values = np.array([_to_scalar(s) for s in scores], dtype=np.float32)
-        imps   = np.zeros_like(values)
-    else:
-        # scalar per token
-        values = np.array([float(s) for s in scores], dtype=np.float32)
-        imps   = np.zeros_like(values)
+    values = _to_scalar_array(values)         # (L,)
+    imps   = _to_scalar_array(imps)           # (L,)
+
+    if attr_mode == "value":
+        attr = torch.tensor(values)
+    elif attr_mode == "imp":
+        attr = torch.tensor(imps)
+    else:  # "lin"
+        attr = torch.tensor(values * np.exp(imps))
 
     # ── Attribution tensor ─────────────────────────────────────────────
     if attr_mode == "value":
@@ -190,30 +189,23 @@ def slalom_explain_and_eval(
         attr = torch.tensor(values * np.exp(imps))
 
     # rest of the function unchanged from here ...
-    enc = tokenizer(
-        text,
-        return_tensors="pt",
-        truncation=True,
-        return_special_tokens_mask=True,
-    )
+    enc = tokenizer(text, return_tensors="pt", truncation=True,
+                    return_special_tokens_mask=True)
     enc = {k: v.to(device) for k, v in enc.items()}
-    input_ids     = enc["input_ids"]
+    input_ids      = enc["input_ids"]
     attention_mask = enc["attention_mask"]
 
-    # Align attr length with tokenizer output
-    # SLALOM may strip special tokens — pad/trim to match
     L = input_ids.shape[1]
     if attr.shape[0] != L:
-        # SLALOM strips specials by default; re-insert zeros at special positions
+        # SLALOM stripped specials — re-insert zeros at special positions
         special_ids_set = set(tokenizer.all_special_ids)
         keep_idx = [i for i, tid in enumerate(input_ids[0].tolist())
                     if tid not in special_ids_set]
         full_attr = torch.zeros(L, dtype=torch.float32)
         if len(keep_idx) == attr.shape[0]:
-            for j, idx in enumerate(keep_idx):
-                full_attr[idx] = attr[j]
+            full_attr[keep_idx] = attr
         attr = full_attr
-
+    # else: lengths match, use attr directly
     log_odd, comp, suff, pred_id = compute_metrics(
         model, tokenizer, device,
         input_ids, attention_mask, extra_kwargs,
@@ -295,8 +287,8 @@ def run_benchmark(args):
                 topk=args.topk,
                 attr_mode=args.attr_mode,
             )
-            print(res[0])        # full tuple
-            print(type(res[0][1]), res[0][1])   # what value actually is            total_log_odd += res["log_odd"]
+            print(type(res), list(res.keys()))
+            total_log_odd += res["log_odd"]
             total_comp    += res["comp"]
             total_suff    += res["suff"]
             total_time    += res["time"]
