@@ -141,19 +141,19 @@ def slalom_explain_and_eval(
     t1 = time.perf_counter()
 
     # ── Extract attribution tensor for ranking ─────────────────────────
+    # ── Attribution tensor for metric ranking ──────────────────────────
+    tokens_out = [r["token"] for r in res]
+    values     = np.array([r["value"] for r in res], dtype=np.float32)
+    imps       = np.array([r["imp"]   for r in res], dtype=np.float32)
     if attr_mode == "value":
-        attr = torch.tensor(res["value"], dtype=torch.float32)
+        attr = torch.tensor(values)
     elif attr_mode == "imp":
-        attr = torch.tensor(res["imp"], dtype=torch.float32)
-    else:  # "lin" — linearized SLALOM score (Section B.7 of paper)
-        val = np.array(res["value"])
-        imp = np.array(res["imp"])
-        lin = val * np.exp(imp)
-        attr = torch.tensor(lin, dtype=torch.float32)
-        res["lin"] = lin.tolist()
+        attr = torch.tensor(imps)
+    else:  # "lin" — linearized SLALOM score: v * exp(s), Section B.7
+        lin  = values * np.exp(imps)
+        attr = torch.tensor(lin)
 
-    # ── Re-tokenize to get input_ids for metric computation ────────────
-    # (SLALOM internally tokenizes; we need input_ids for embed lookup)
+    # rest of the function unchanged from here ...
     enc = tokenizer(
         text,
         return_tensors="pt",
@@ -185,16 +185,16 @@ def slalom_explain_and_eval(
     )
 
     return {
-        "tokens":   res["tokens"],
-        "value":    res.get("value"),
-        "imp":      res.get("imp"),
-        "lin":      res.get("lin"),
-        "attr_used": attr.tolist(),
+        "tokens":          tokens_out,
+        "value":           values.tolist(),
+        "imp":             imps.tolist(),
+        "lin":             (values * np.exp(imps)).tolist(),
+        "attr_used":       attr.tolist(),
         "predicted_label": pred_id,
-        "time":     t1 - t0,
-        "log_odd":  log_odd,
-        "comp":     comp,
-        "suff":     suff,
+        "time":            t1 - t0,
+        "log_odd":         log_odd,
+        "comp":            comp,
+        "suff":            suff,
     }
 
 
