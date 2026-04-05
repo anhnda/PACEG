@@ -112,15 +112,14 @@ _clf_cache = _attcat_cache   # same object, not a copy
 # ~/.cache/huggingface/hub. After the first download it loads from disk only.
 _mlm_cache: dict = {}
 
-# MLM oracle selection:
-# - For RoBERTa classifiers: reuse the classifier checkpoint itself as the MLM
-#   oracle (it IS a masked LM by pretraining; the clf head is just a small addon).
-#   The weights are already downloaded — no extra download needed.
-# - For BERT/DistilBERT classifiers: use roberta-base as the oracle (original
-#   ReAGent design), which requires a one-time download of ~500 MB.
-#   Alternatively set MLM_ORACLE_FALLBACK to "bert-base-uncased" to avoid it.
-MLM_ORACLE_ROBERTA = None        # sentinel: "use the classifier itself"
-MLM_ORACLE_FALLBACK = "roberta-base"   # used for bert / distilbert
+# MLM oracle: reuse backbone already cached for the classifier.
+# bert->bert-base-uncased, distilbert->distilbert-base-uncased,
+# roberta->clf checkpoint itself (IS a masked LM, clf head ignored).
+_BACKBONE_MLM = {
+    "bert":       "bert-base-uncased",
+    "distilbert": "distilbert-base-uncased",
+    "roberta":    None,
+}
 
 MODEL_NAMES = {
     ("distilbert", "sst2"):   "distilbert-base-uncased-finetuned-sst-2-english",
@@ -134,30 +133,12 @@ MODEL_NAMES = {
     ("roberta",    "rotten"): "textattack/roberta-base-rotten-tomatoes",
 }
 
-# Map model family → which MLM oracle to use
-# "roberta" classifiers act as their own oracle (same architecture, already local)
-# "bert" and "distilbert" need an external MLM oracle
-MLM_ORACLE_MAP = {
-    "distilbert": MLM_ORACLE_FALLBACK,
-    "bert":       MLM_ORACLE_FALLBACK,
-    "roberta":    None,   # None = use the classifier checkpoint itself
-}
-
 
 def _resolve_mlm_name(model_family: str, clf_model_name: str) -> str:
-    """
-    Return the HuggingFace model name to use as the MLM oracle.
-
-    For RoBERTa: returns clf_model_name itself — no extra download.
-    For BERT/DistilBERT: returns MLM_ORACLE_FALLBACK (roberta-base).
-    """
-    oracle = MLM_ORACLE_MAP.get(model_family, MLM_ORACLE_FALLBACK)
-    if oracle is None:
-        # Use the classifier's own checkpoint as the MLM oracle.
-        # AutoModelForMaskedLM will load the RoBERTa backbone weights
-        # (already on disk) and ignore the classification head.
-        return clf_model_name
-    return oracle
+    backbone = _BACKBONE_MLM.get(model_family)
+    if backbone is None:
+        return clf_model_name  # roberta: clf checkpoint IS the MLM
+    return backbone
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -484,15 +465,15 @@ def reagent_classification(
     t0 = time.perf_counter()
 
     # ── Resolve MLM oracle name ──
-    # Detect model family from model_name string to pick the right oracle.
     if mlm_name is None:
         if "roberta" in model_name.lower():
-            # RoBERTa classifier IS a masked LM — use it directly, no extra download
-            mlm_name = model_name
-        elif "distilbert" in model_name.lower() or "bert" in model_name.lower():
-            mlm_name = MLM_ORACLE_FALLBACK
+            mlm_name = _resolve_mlm_name("roberta", model_name)
+        elif "distilbert" in model_name.lower():
+            mlm_name = _resolve_mlm_name("distilbert", model_name)
+        elif "bert" in model_name.lower():
+            mlm_name = _resolve_mlm_name("bert", model_name)
         else:
-            mlm_name = MLM_ORACLE_FALLBACK   # safe default
+            mlm_name = _resolve_mlm_name("bert", model_name)  # safe default
 
     # ── Load models ──
     clf_tokenizer, clf_model = _load_clf(model_name, device)
