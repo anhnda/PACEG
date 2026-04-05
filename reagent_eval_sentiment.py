@@ -112,7 +112,15 @@ _clf_cache = _attcat_cache   # same object, not a copy
 # ~/.cache/huggingface/hub. After the first download it loads from disk only.
 _mlm_cache: dict = {}
 
-MLM_ORACLE = "roberta-base"   # same oracle as original ReAGent
+# MLM oracle selection:
+# - For RoBERTa classifiers: reuse the classifier checkpoint itself as the MLM
+#   oracle (it IS a masked LM by pretraining; the clf head is just a small addon).
+#   The weights are already downloaded — no extra download needed.
+# - For BERT/DistilBERT classifiers: use roberta-base as the oracle (original
+#   ReAGent design), which requires a one-time download of ~500 MB.
+#   Alternatively set MLM_ORACLE_FALLBACK to "bert-base-uncased" to avoid it.
+MLM_ORACLE_ROBERTA = None        # sentinel: "use the classifier itself"
+MLM_ORACLE_FALLBACK = "roberta-base"   # used for bert / distilbert
 
 MODEL_NAMES = {
     ("distilbert", "sst2"):   "distilbert-base-uncased-finetuned-sst-2-english",
@@ -125,6 +133,31 @@ MODEL_NAMES = {
     ("roberta",    "imdb"):   "textattack/roberta-base-imdb",
     ("roberta",    "rotten"): "textattack/roberta-base-rotten-tomatoes",
 }
+
+# Map model family → which MLM oracle to use
+# "roberta" classifiers act as their own oracle (same architecture, already local)
+# "bert" and "distilbert" need an external MLM oracle
+MLM_ORACLE_MAP = {
+    "distilbert": MLM_ORACLE_FALLBACK,
+    "bert":       MLM_ORACLE_FALLBACK,
+    "roberta":    None,   # None = use the classifier checkpoint itself
+}
+
+
+def _resolve_mlm_name(model_family: str, clf_model_name: str) -> str:
+    """
+    Return the HuggingFace model name to use as the MLM oracle.
+
+    For RoBERTa: returns clf_model_name itself — no extra download.
+    For BERT/DistilBERT: returns MLM_ORACLE_FALLBACK (roberta-base).
+    """
+    oracle = MLM_ORACLE_MAP.get(model_family, MLM_ORACLE_FALLBACK)
+    if oracle is None:
+        # Use the classifier's own checkpoint as the MLM oracle.
+        # AutoModelForMaskedLM will load the RoBERTa backbone weights
+        # (already on disk) and ignore the classification head.
+        return clf_model_name
+    return oracle
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -408,7 +441,7 @@ def reagent_classification(
     model_name: str,
     top_k: int = 3,
     topk_pct: int = 20,
-    mlm_name: str = MLM_ORACLE,
+    mlm_name: str | None = None,   # None → auto-resolved from model_name
     show_special_tokens: bool = False,
     device: str | None = None,
 ) -> dict:
@@ -437,6 +470,17 @@ def reagent_classification(
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
     t0 = time.perf_counter()
+
+    # ── Resolve MLM oracle name ──
+    # Detect model family from model_name string to pick the right oracle.
+    if mlm_name is None:
+        if "roberta" in model_name.lower():
+            # RoBERTa classifier IS a masked LM — use it directly, no extra download
+            mlm_name = model_name
+        elif "distilbert" in model_name.lower() or "bert" in model_name.lower():
+            mlm_name = MLM_ORACLE_FALLBACK
+        else:
+            mlm_name = MLM_ORACLE_FALLBACK   # safe default
 
     # ── Load models ──
     clf_tokenizer, clf_model = _load_clf(model_name, device)
@@ -506,12 +550,13 @@ def run_benchmark(args):
     model_name = MODEL_NAMES[(args.model, args.dataset)]
     print(f"Device    : {device}")
     print(f"Classifier: {model_name}")
-    print(f"MLM oracle: {MLM_ORACLE}  (top_k={args.top_k})")
+    resolved_mlm = _resolve_mlm_name(args.model, model_name)
+    print(f"MLM oracle: {resolved_mlm}  (top_k={args.top_k})")
     print(f"Dataset   : {args.dataset}")
 
     # Pre-load both models
     _load_clf(model_name, device)
-    _load_mlm(MLM_ORACLE, device)
+    _load_mlm(resolved_mlm, device)
 
     if args.dataset == "imdb":
         dataset = load_dataset("imdb")["test"]
