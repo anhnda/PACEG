@@ -9,7 +9,8 @@ Pipeline (per TellMeWhy sample)
 2.  Concatenate [Q | A] into a single sequence — one forward pass only.
     GPT-2's causal mask is enforced internally; no extra mask needed.
 3.  Integrate gradients of the *answer-token logit sum* w.r.t. the token
-    embedding, along a linear path from a zero baseline to the real input.
+    embedding, along a linear path from a chosen baseline to the real input
+    (zero | pad | mean — controlled by `baseline` parameter).
 4.  L2-norm over the embedding dimension gives a scalar attribution per token.
 
 Return keys (consumed by xai_metrics_gpt2.py and run_eval_pg_gpt2.py)
@@ -20,7 +21,7 @@ Return keys (consumed by xai_metrics_gpt2.py and run_eval_pg_gpt2.py)
     answer_ids       : Tensor [La]   -- answer token ids (CPU)
     attributions     : Tensor [T]    -- L2-norm attribution per token (CPU)
     input_embed      : Tensor[1,T,D] -- original embedding (CPU, detached)
-    base_embed       : Tensor[1,T,D] -- zero baseline (CPU)
+    base_embed       : Tensor[1,T,D] -- baseline embedding (CPU)
     logits_full      : Tensor[T,V]   -- reference logits (CPU)
     predicted_answer : str           -- decoded answer string
     model            : GPT2LMHeadModel
@@ -70,6 +71,7 @@ def pace_gradient_gpt2(
     b: float = 1.0,
     max_new_tokens: int = 30,
     gold_answer: Optional[str] = None,
+    baseline: str = "zero",
 ) -> dict:
     """
     Run PACE Gradient attribution for one (question, answer) pair.
@@ -83,6 +85,10 @@ def pace_gradient_gpt2(
     a, b           : Integration interval endpoints (default 0 -> 1).
     max_new_tokens : Tokens to generate when gold_answer is None.
     gold_answer    : If provided, skip generation and use this string as A.
+    baseline       : IG baseline type. One of:
+                       'zero' -- all-zero embedding vector (default, standard IG)
+                       'pad'  -- EOS/pad token embedding repeated across sequence
+                       'mean' -- mean of entire vocabulary embedding matrix
 
     Returns
     -------
@@ -143,7 +149,30 @@ def pace_gradient_gpt2(
     with torch.no_grad():
         input_embed = embed_layer(full_ids).detach()  # [1, T, D]
 
-    base_embed = torch.zeros_like(input_embed)        # [1, T, D]
+    # ------------------------------------------------------------------
+    # Baseline embedding  (IG reference point)
+    #
+    #   zero : all-zero vector — standard IG (Sundararajan et al. 2017)
+    #          out-of-distribution for GPT-2 but mathematically clean
+    #   pad  : EOS token embedding broadcast across all positions
+    #          in-distribution; makes PACE/ReAGent perturbation spaces
+    #          more comparable (both use EOS as "absent token")
+    #   mean : mean of the full vocabulary embedding matrix
+    #          semantically neutral, in-distribution, no token bias
+    # ------------------------------------------------------------------
+    if baseline == "zero":
+        base_embed = torch.zeros_like(input_embed)
+    elif baseline == "pad":
+        pad_id     = torch.tensor([[tokenizer.eos_token_id]], device=device)
+        pad_vec    = embed_layer(pad_id).detach()          # [1, 1, D]
+        base_embed = pad_vec.expand_as(input_embed).clone()
+    elif baseline == "mean":
+        mean_vec   = embed_layer.weight.mean(dim=0, keepdim=True)  # [1, D]
+        base_embed = mean_vec.unsqueeze(0).expand_as(input_embed).clone()
+    else:
+        raise ValueError(f"Unknown baseline '{baseline}'. Choose: zero | pad | mean")
+
+    base_embed = base_embed.detach()
     delta      = input_embed - base_embed             # [1, T, D]
 
     # ------------------------------------------------------------------

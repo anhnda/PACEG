@@ -113,6 +113,7 @@ def run_single_example(
     topk: int,
     max_new_tokens: int,
     n_samples: int,
+    baseline: str = "zero",
 ) -> dict:
     """
     Full pipeline for one TellMeWhy sample:
@@ -140,6 +141,7 @@ def run_single_example(
         steps=steps,
         max_new_tokens=max_new_tokens,
         gold_answer=gold_answer,
+        baseline=baseline,
     )
 
     model            = res["model"]
@@ -186,6 +188,7 @@ def run_benchmark(args) -> None:
     print(f"Samples     : {args.num_samples}")
     print(f"Steps       : {args.steps}")
     print(f"Top-k %     : {args.topk}")
+    print(f"Baseline    : {args.baseline}")
     print(f"Gold answer : {args.use_gold}")
     print(f"MC samples  : {args.n_samples}")
 
@@ -223,6 +226,7 @@ def run_benchmark(args) -> None:
                 topk           = args.topk,
                 max_new_tokens = args.max_new_tokens,
                 n_samples      = args.n_samples,
+                baseline       = args.baseline,
             )
 
             total_soft_nc  += res["soft_nc"]
@@ -331,6 +335,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_samples", type=int, default=10,
         help="Monte-Carlo draws for soft Bernoulli perturbation (default: 10)"
+    )
+    parser.add_argument(
+        "--baseline", type=str, default="zero",
+        choices=["zero", "pad", "mean"],
+        help="IG baseline: zero (default) | pad (EOS embedding) | mean (vocab mean)"
     )
     parser.add_argument(
         "--use_gold", action="store_true",
