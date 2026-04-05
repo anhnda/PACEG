@@ -90,9 +90,27 @@ random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)
 
-# ── Lazy model cache (avoid reloading on every call) ──────────────────────
-_clf_cache:  dict = {}   # model_name → (tokenizer, model)
-_mlm_cache:  dict = {}   # mlm_name   → (tokenizer, model)
+# Match AttCAT / PACE SDP settings so numerics are identical when run standalone
+torch.backends.cuda.enable_flash_sdp(False)
+torch.backends.cuda.enable_mem_efficient_sdp(False)
+torch.backends.cuda.enable_math_sdp(True)
+
+# ── Shared classifier cache ────────────────────────────────────────────────
+# AttCAT uses a module-level `cache` dict keyed by model_name → {"model":..., "tokenizer":...}
+# We import and reuse it so both methods share one loaded classifier instance,
+# saving GPU memory and avoiding a redundant download/reload.
+try:
+    from attcat_eval_sentiment import cache as _attcat_cache
+except ImportError:
+    _attcat_cache = {}   # running standalone — use our own empty dict
+
+_clf_cache = _attcat_cache   # same object, not a copy
+
+# ── Separate cache only for the MLM oracle ────────────────────────────────
+# roberta-base is ReAGent-specific and not used by AttCAT/PACE.
+# This WILL trigger a one-time download if roberta-base is not yet in
+# ~/.cache/huggingface/hub. After the first download it loads from disk only.
+_mlm_cache: dict = {}
 
 MLM_ORACLE = "roberta-base"   # same oracle as original ReAGent
 
@@ -127,12 +145,18 @@ def _hellinger(p: torch.Tensor, q: torch.Tensor) -> float:
 
 
 def _load_clf(model_name: str, device: str):
+    """
+    Load classifier, reusing AttCAT's shared cache dict format:
+        _clf_cache[model_name] = {"model": ..., "tokenizer": ...}
+    If AttCAT already loaded this model we get it for free — no re-download.
+    """
     if model_name not in _clf_cache:
         tok = AutoTokenizer.from_pretrained(model_name, use_fast=True)
         mdl = AutoModelForSequenceClassification.from_pretrained(model_name).to(device)
         mdl.eval()
-        _clf_cache[model_name] = (tok, mdl)
-    return _clf_cache[model_name]
+        _clf_cache[model_name] = {"model": mdl, "tokenizer": tok}
+    entry = _clf_cache[model_name]
+    return entry["tokenizer"], entry["model"]
 
 
 def _load_mlm(mlm_name: str, device: str):
