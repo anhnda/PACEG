@@ -2,7 +2,7 @@
 import json
 import math
 import time
-import tqdm
+from tqdm import tqdm
 import torch
 import random
 import inspect
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     print_step = 100
     print("Starting PACE attribution computation...")
 
-    for row in tqdm.tqdm(data):
+    for row in tqdm(data):
         text = row[0]
         res  = pace_gradient_classification(
             sentence=text, a=a, b=b, steps=steps,
