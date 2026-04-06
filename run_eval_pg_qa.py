@@ -2,7 +2,7 @@
 Benchmark Script for PACE Gradient Attribution on Question Answering
 
 Usage:
-    python run_eval_pg_qa.py --model_name deepset/bert-base-cased-squad2 --num_samples 1000 --steps 101
+    python run_eval_pg_qa.py --model_name cleandata/bert-finetuned-squad (deepset/bert-base-cased-squad2) --num_samples 1000 --steps 101
 """
 
 import time
@@ -201,7 +201,7 @@ if __name__ == "__main__":
         description="Benchmark PACE Gradient Attribution for Question Answering"
     )
     parser.add_argument("--model_name",    type=str,
-                        default="deepset/bert-base-cased-squad2")
+                        default="cleandata/bert-finetuned-squad")
     parser.add_argument("--dataset",       type=str, default="squad")
     parser.add_argument("--steps",         type=int, default=100)
     parser.add_argument("--num_samples",   type=int, default=1000)
