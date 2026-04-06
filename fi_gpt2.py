@@ -60,10 +60,13 @@ from transformers import GPT2LMHeadModel, GPT2TokenizerFast
 # Reuse the model cache from paceg_gpt2 if co-located, otherwise define here
 _CACHE: dict = {}
 
-
-def get_model_tokenizer(model_name: str = "gpt2", device: str = "cpu"):
+def get_model_tokenizer(
+    model_name: str = "gpt2",
+    device: str = "cpu",
+):
     """Return (model, tokenizer), loading from HuggingFace only once."""
-    key = (model_name, device)
+    device = str(torch.device(device))   # normalizes "cuda" -> "cuda:0"
+    key = (model_name, device)           # no `type` — GPT-2 cache needs only these two
     if key not in _CACHE:
         tok = GPT2TokenizerFast.from_pretrained(model_name)
         tok.pad_token = tok.eos_token
@@ -71,7 +74,6 @@ def get_model_tokenizer(model_name: str = "gpt2", device: str = "cpu"):
         mdl.eval().to(device)
         _CACHE[key] = (mdl, tok)
     return _CACHE[key]
-
 
 # ---------------------------------------------------------------------------
 # Covariance helpers  (mirrors utilss.py from the FI paper)

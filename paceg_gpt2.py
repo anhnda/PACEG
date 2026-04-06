@@ -40,24 +40,20 @@ from transformers import GPT2LMHeadModel, GPT2TokenizerFast
 # ---------------------------------------------------------------------------
 _CACHE: dict = {}
 
-
 def get_model_tokenizer(
     model_name: str = "gpt2",
     device: str = "cpu",
 ):
     """Return (model, tokenizer), loading from HuggingFace only once."""
-    device = str(torch.device(device))   # normalizes "cuda" -> "cuda:0", "cpu" -> "cpu"
-    key = (model_name, device, type)   
+    device = str(torch.device(device))   # normalizes "cuda" -> "cuda:0"
+    key = (model_name, device)           # no `type` — GPT-2 cache needs only these two
     if key not in _CACHE:
         tok = GPT2TokenizerFast.from_pretrained(model_name)
-        tok.pad_token = tok.eos_token          # GPT-2 has no pad token
-
+        tok.pad_token = tok.eos_token
         mdl = GPT2LMHeadModel.from_pretrained(model_name)
         mdl.eval().to(device)
         _CACHE[key] = (mdl, tok)
-
     return _CACHE[key]
-
 
 # ---------------------------------------------------------------------------
 # Core attribution function
