@@ -146,47 +146,29 @@ def _delta_P(
     P_pert = _vocab_dist(model, embed_pert, position, device)
     return _hellinger(P_orig, P_pert)
 
-
 def _delta_P0(
     model,
     embed_orig: torch.Tensor,
+    eval_base_embed: torch.Tensor,   # (1, T, D) or (1, 1, D) — replaces hardcoded zeros
     position: int,
     device: str,
 ) -> torch.Tensor:
-    """
-    Normalisation anchor  ΔP_{0,t}  (denominator in Eq. 14-15).
+    """ΔP_{0,t} = Hellinger( P_base_t , P_orig_t )"""
+    P_base = _vocab_dist(model, eval_base_embed, position, device)
+    P_orig = _vocab_dist(model, embed_orig,      position, device)
+    return _hellinger(P_base, P_orig)
 
-    = Hellinger( P_zero_t , P_orig_t )
-
-    P_zero is the vocab distribution when the model receives an all-zero
-    token embedding (the PACE baseline).
-    """
-    embed_zero = torch.zeros_like(embed_orig)
-    P_zero = _vocab_dist(model, embed_zero, position, device)
-    P_orig = _vocab_dist(model, embed_orig, position, device)
-    return _hellinger(P_zero, P_orig)
-
-
-# ============================================================
-# Sequence-level metric aggregators
-# ============================================================
 
 def _soft_nc_sequence(
     model,
     embed_orig: torch.Tensor,
     attributions: torch.Tensor,
     answer_positions: list,
+    eval_base_embed: torch.Tensor,
     device: str,
     n_samples: int,
     stride: int,
 ) -> torch.Tensor:
-    """
-    Soft-NC averaged over answer positions (Eq. 15).
-
-    Soft-NC_t = ΔP_{X'\\R, t} / ΔP_{0,t}
-
-    Averaged over n_samples Bernoulli draws and over evaluated positions.
-    """
     positions = answer_positions[::stride]
     if not positions:
         return torch.tensor(0.0)
@@ -195,7 +177,7 @@ def _soft_nc_sequence(
     valid    = 0
 
     for pos in positions:
-        dP0 = _delta_P0(model, embed_orig, pos, device)
+        dP0 = _delta_P0(model, embed_orig, eval_base_embed, pos, device)
         if dP0.item() < 1e-8:
             continue
         valid += 1
@@ -217,17 +199,11 @@ def _soft_ns_sequence(
     embed_orig: torch.Tensor,
     attributions: torch.Tensor,
     answer_positions: list,
+    eval_base_embed: torch.Tensor,
     device: str,
     n_samples: int,
     stride: int,
 ) -> torch.Tensor:
-    """
-    Soft-NS averaged over answer positions (Eq. 14).
-
-    Soft-NS_t = max(0, ΔP_{0,t} − ΔP_{X',t}) / ΔP_{0,t}
-
-    Averaged over n_samples Bernoulli draws and over evaluated positions.
-    """
     positions = answer_positions[::stride]
     if not positions:
         return torch.tensor(0.0)
@@ -236,7 +212,7 @@ def _soft_ns_sequence(
     valid    = 0
 
     for pos in positions:
-        dP0 = _delta_P0(model, embed_orig, pos, device)
+        dP0 = _delta_P0(model, embed_orig, eval_base_embed, pos, device)
         if dP0.item() < 1e-8:
             continue
         valid += 1
@@ -316,37 +292,30 @@ def calculate_all_metrics_gpt2(
     n_samples: int = 10,
     stride: int = 1,
     device: str = "cpu",
+    eval_base_embed: torch.Tensor | None = None,   # ← added
 ) -> dict:
     """
-    Compute Soft-NC, Soft-NS, and Log-Odds for one example.
-
-    Parameters
-    ----------
-    model            : GPT2LMHeadModel (on `device`)
-    input_embed      : [1, T, D]  original token embeddings (CPU)
-    base_embed       : [1, T, D]  zero baseline (CPU) — kept for API symmetry
-    attributions     : [T]        PACE attribution scores (CPU)
-    answer_ids       : [La]       answer token ids (CPU)
-    answer_positions : list[int]  positions of answer tokens in [Q|A]
-    topk             : % of Q-tokens masked for log-odds (default 20)
-    n_samples        : Monte-Carlo Bernoulli draws for Soft-NC/NS (default 10)
-    stride           : evaluate every `stride` answer positions (default 1)
-    device           : compute device
-
-    Returns
-    -------
-    dict:
-        soft_nc  : torch.Tensor scalar   (.item() gives float)
-        soft_ns  : torch.Tensor scalar
-        log_odds : torch.Tensor scalar
+    eval_base_embed : (1, T, D) or (1, 1, D) baseline used in ΔP_0
+                      (the normalisation anchor for Soft-NC and Soft-NS).
+                      If None, falls back to base_embed for backward
+                      compatibility (which itself defaulted to zeros).
     """
+    # Resolve eval baseline — prefer explicit eval_base_embed,
+    # fall back to base_embed (preserves original behaviour when not set)
+    anchor = eval_base_embed if eval_base_embed is not None else base_embed
+
+    # Expand (1, 1, D) → (1, T, D) if needed
+    T = input_embed.shape[1]
+    if anchor.shape[1] == 1 and T > 1:
+        anchor = anchor.expand(1, T, -1)
+
     soft_nc = _soft_nc_sequence(
         model, input_embed, attributions,
-        answer_positions, device, n_samples, stride,
+        answer_positions, anchor, device, n_samples, stride,
     )
     soft_ns = _soft_ns_sequence(
         model, input_embed, attributions,
-        answer_positions, device, n_samples, stride,
+        answer_positions, anchor, device, n_samples, stride,
     )
     log_odds = _log_odds_sequence(
         model, input_embed, attributions,

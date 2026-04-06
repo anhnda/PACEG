@@ -33,7 +33,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from paceg_gpt2 import pace_gradient_gpt2, get_model_tokenizer
+from paceg_gpt2 import pace_gradient_gpt2, get_model_tokenizer, _build_base_embed
 from xai_metrics_gpt2 import calculate_all_metrics_gpt2
 
 # ── reproducibility ──────────────────────────────────────────────────────────
@@ -103,7 +103,6 @@ def load_tellmewhy_txt(path: str, num_samples: int, use_gold: bool) -> list[dict
 # ─────────────────────────────────────────────────────────────────────────────
 # Single-sample pipeline
 # ─────────────────────────────────────────────────────────────────────────────
-
 def run_single_example(
     question: str,
     gold_answer,
@@ -114,26 +113,8 @@ def run_single_example(
     max_new_tokens: int,
     n_samples: int,
     baseline: str = "zero",
+    eval_base_embed: torch.Tensor = None,   # (1, 1, D)
 ) -> dict:
-    """
-    Full pipeline for one TellMeWhy sample:
-        1. PACE gradient attribution  (paceg_gpt2.py)
-        2. Faithfulness metrics       (xai_metrics_gpt2.py)
-
-    Args:
-        question       : Narrative + "Why did ...?" string.
-        gold_answer    : If not None, use gold instead of generating.
-        model_name     : GPT-2 variant.
-        device         : 'cuda' or 'cpu'.
-        steps          : Riemann-sum steps for PACE integration.
-        topk           : Percentage of Q-tokens masked for log-odds.
-        max_new_tokens : Max generation length when not using gold answer.
-        n_samples      : Monte-Carlo draws for soft Bernoulli perturbation.
-
-    Returns:
-        dict with attribution results + all three metrics.
-    """
-    # ── PACE attribution ──────────────────────────────────────────────────
     res = pace_gradient_gpt2(
         question=question,
         model_name=model_name,
@@ -144,30 +125,23 @@ def run_single_example(
         baseline=baseline,
     )
 
-    model            = res["model"]
-    input_embed      = res["input_embed"]
-    base_embed       = res["base_embed"]
-    attributions     = res["attributions"]
-    answer_ids       = res["answer_ids"]
-    answer_positions = res["answer_positions"]
-
-    # ── Faithfulness metrics ──────────────────────────────────────────────
     metrics = calculate_all_metrics_gpt2(
-        model=model,
-        input_embed=input_embed,
-        base_embed=base_embed,
-        attributions=attributions,
-        answer_ids=answer_ids,
-        answer_positions=answer_positions,
+        model=res["model"],
+        input_embed=res["input_embed"],
+        base_embed=res["base_embed"],
+        attributions=res["attributions"],
+        answer_ids=res["answer_ids"],
+        answer_positions=res["answer_positions"],
         topk=topk,
         n_samples=n_samples,
         device=device,
+        eval_base_embed=eval_base_embed,
     )
 
     return {
         "tokens":           res["tokens"],
         "q_len":            res["q_len"],
-        "attributions":     attributions,
+        "attributions":     res["attributions"],
         "predicted_answer": res["predicted_answer"],
         "time":             res["time"],
         "soft_nc":          metrics["soft_nc"].item(),
@@ -176,39 +150,46 @@ def run_single_example(
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Benchmark loop
-# ─────────────────────────────────────────────────────────────────────────────
-
 def run_benchmark(args) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    device = str(torch.device(device))   # normalize once, use everywhere
-    print(f"Device      : {device}")
-    print(f"Model       : {args.model_name}")
-    print(f"Dataset     : {args.data_path}")
-    print(f"Samples     : {args.num_samples}")
-    print(f"Steps       : {args.steps}")
-    print(f"Top-k %     : {args.topk}")
-    print(f"Baseline    : {args.baseline}")
-    print(f"Gold answer : {args.use_gold}")
-    print(f"MC samples  : {args.n_samples}")
+    device = str(torch.device(device))
+    print(f"Device        : {device}")
+    print(f"Model         : {args.model_name}")
+    print(f"Dataset       : {args.data_path}")
+    print(f"Samples       : {args.num_samples}")
+    print(f"Steps         : {args.steps}")
+    print(f"Top-k %       : {args.topk}")
+    print(f"Baseline      : {args.baseline}")
+    print(f"Eval baseline : {args.eval_baseline}")
+    print(f"Gold answer   : {args.use_gold}")
+    print(f"MC samples    : {args.n_samples}")
 
-    # Pre-load model once (cached)
     print("\nLoading model ...")
-    get_model_tokenizer(args.model_name, device)
+    model, tokenizer = get_model_tokenizer(args.model_name, device)
     print("Model loaded.\n")
+
+    # Build eval_base_embed once
+    embed_layer = model.transformer.wte
+    with torch.no_grad():
+        dummy_embed = embed_layer(
+            torch.tensor([[tokenizer.eos_token_id]], device=device)
+        ).detach().cpu()   # (1, 1, D)
+
+    eval_base_embed = _build_base_embed(
+        embed_layer, dummy_embed,
+        args.eval_baseline, tokenizer.eos_token_id,
+        device="cpu",
+    )   # (1, 1, D)
 
     samples = load_tellmewhy_txt(
         args.data_path,
         num_samples=args.num_samples,
         use_gold=args.use_gold,
     )
-
     if not samples:
         print("No samples found — check --data_path.")
         return
 
-    # Accumulators
     total_soft_nc  = 0.0
     total_soft_ns  = 0.0
     total_log_odds = 0.0
@@ -219,15 +200,16 @@ def run_benchmark(args) -> None:
     for idx, sample in enumerate(tqdm(samples, desc="Evaluating")):
         try:
             res = run_single_example(
-                question       = sample["question"],
-                gold_answer    = sample["gold_answer"],
-                model_name     = args.model_name,
-                device         = device,
-                steps          = args.steps,
-                topk           = args.topk,
-                max_new_tokens = args.max_new_tokens,
-                n_samples      = args.n_samples,
-                baseline       = args.baseline,
+                question        = sample["question"],
+                gold_answer     = sample["gold_answer"],
+                model_name      = args.model_name,
+                device          = device,
+                steps           = args.steps,
+                topk            = args.topk,
+                max_new_tokens  = args.max_new_tokens,
+                n_samples       = args.n_samples,
+                baseline        = args.baseline,
+                eval_base_embed = eval_base_embed,
             )
 
             total_soft_nc  += res["soft_nc"]
@@ -251,7 +233,6 @@ def run_benchmark(args) -> None:
                 traceback.print_exc()
             continue
 
-    # ── Final summary ─────────────────────────────────────────────────────
     print("\n" + "=" * 60)
     print("FINAL RESULTS")
     print("=" * 60)
@@ -265,7 +246,6 @@ def run_benchmark(args) -> None:
     else:
         print("  No samples processed successfully.")
     print("=" * 60)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Printing helpers
@@ -354,6 +334,11 @@ if __name__ == "__main__":
         "--verbose", action="store_true",
         help="Print attribution details for first 3 samples"
     )
-
+    # in CLI argparse
+    parser.add_argument(
+        "--eval-baseline", type=str, default="zero",
+        choices=["zero", "pad", "mean"],
+        help="Baseline embedding used in ΔP_0 normalisation anchor for Soft-NC/NS",
+    )
     args = parser.parse_args()
     run_benchmark(args)

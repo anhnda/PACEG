@@ -58,7 +58,25 @@ def get_model_tokenizer(
 # ---------------------------------------------------------------------------
 # Core attribution function
 # ---------------------------------------------------------------------------
-
+# in paceg_gpt2.py — add this function
+def _build_base_embed(
+    embed_layer: torch.nn.Embedding,
+    input_embed: torch.Tensor,   # (1, T, D) or (1, 1, D) — shape reference
+    baseline: str,
+    eos_token_id: int,
+    device: str,
+) -> torch.Tensor:
+    if baseline == "zero":
+        return torch.zeros_like(input_embed)
+    elif baseline == "pad":
+        pad_id  = torch.tensor([[eos_token_id]], device=device)
+        pad_vec = embed_layer(pad_id).detach()
+        return pad_vec.expand_as(input_embed).clone()
+    elif baseline == "mean":
+        mean_vec = embed_layer.weight.mean(dim=0, keepdim=True)
+        return mean_vec.unsqueeze(0).expand_as(input_embed).clone()
+    else:
+        raise ValueError(f"Unknown baseline '{baseline}'. Choose: zero | pad | mean")
 def pace_gradient_gpt2(
     question: str,
     model_name: str = "gpt2",
