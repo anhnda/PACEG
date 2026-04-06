@@ -30,6 +30,54 @@ torch.manual_seed(42)
 
 
 # ---------------------------------------------------------------------------
+# QA → classification adapter for SLALOM
+# ---------------------------------------------------------------------------
+
+class QAModelWrapper(torch.nn.Module):
+    """
+    Wraps an AutoModelForQuestionAnswering so it presents a classification-
+    compatible interface that SLALOM accepts.
+
+    SLALOM calls model(input_ids) and expects a plain logit Tensor.
+    QA models return a QuestionAnsweringModelOutput, which SLALOM rejects.
+
+    Strategy chosen: expose start_logits as the output logits.
+    SLALOM will then compute token attributions w.r.t. the start-position
+    distribution, which is a reasonable single proxy for the QA task
+    (start and end attributions are typically highly correlated for
+    extractive QA, and SLALOM cannot target two heads simultaneously).
+
+    The wrapper also stores the last start_logits / end_logits so that
+    the outer code can read true QA predictions after a forward pass.
+    """
+
+    def __init__(self, qa_model):
+        super().__init__()
+        self.qa_model      = qa_model
+        self.last_start_logits = None
+        self.last_end_logits   = None
+
+    # Expose the underlying embeddings so SLALOM's internals can reach them.
+    def get_input_embeddings(self):
+        return self.qa_model.get_input_embeddings()
+
+    def forward(self, input_ids=None, attention_mask=None,
+                token_type_ids=None, inputs_embeds=None, **kwargs):
+        out = self.qa_model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            inputs_embeds=inputs_embeds,
+            **kwargs,
+        )
+        self.last_start_logits = out.start_logits   # [B, L]
+        self.last_end_logits   = out.end_logits     # [B, L]
+        # Return start_logits as the "classification logits" SLALOM expects.
+        # Shape [B, L] — SLALOM treats each position as a "class".
+        return out.start_logits
+
+
+# ---------------------------------------------------------------------------
 # Output structure detection  (shared logic with slalom_eval.py)
 # ---------------------------------------------------------------------------
 _SLALOM_FORMAT = None   # detected lazily on first call
@@ -105,18 +153,25 @@ def _detect_and_unpack(res):
 # ---------------------------------------------------------------------------
 
 def _get_base_emb(model, tokenizer, device):
-    mask_id = tokenizer.mask_token_id or tokenizer.pad_token_id
+    mask_id  = tokenizer.mask_token_id or tokenizer.pad_token_id
+    qa_model = _unwrap(model)
     with torch.no_grad():
-        return model.get_input_embeddings()(
+        return qa_model.get_input_embeddings()(
             torch.tensor([[mask_id]], device=device)
         ).squeeze(0)
+
+
+def _unwrap(model):
+    """Return the underlying QA model from a QAModelWrapper, or model itself."""
+    return model.qa_model if isinstance(model, QAModelWrapper) else model
 
 
 def _forward_qa_probs(model, embed_input, attention_mask, token_type_ids,
                       start_idx, end_idx):
     """Return (prob_start, prob_end) for the given position indices."""
+    qa_model = _unwrap(model)
     with torch.no_grad():
-        out = model(
+        out = qa_model(
             inputs_embeds=embed_input,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -135,6 +190,7 @@ def compute_metrics_qa(
     """
     Compute log-odds, comprehensiveness, sufficiency for QA start and end positions.
 
+    model may be a QAModelWrapper or a raw AutoModelForQuestionAnswering.
     attr_start / attr_end : [seq_len] tensors aligned to the full tokenized sequence.
 
     Returns:
@@ -143,10 +199,11 @@ def compute_metrics_qa(
         suff_start,    suff_end,
         start_idx,     end_idx
     """
-    embed = model.get_input_embeddings()
+    qa_model = _unwrap(model)
+    embed = qa_model.get_input_embeddings()
     with torch.no_grad():
         X   = embed(input_ids)        # [1, seq, d]
-        out = model(
+        out = qa_model(
             inputs_embeds=X,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -230,14 +287,15 @@ def slalom_explain_and_eval_qa(
         "imp"   — use SLALOM importance scores
         "lin"   — linearized: value * exp(imp)   (paper default, Section B.7)
 
-    For QA, SLALOM is called on the concatenated "question [SEP] context" string
-    so the explanation covers the full input.  The same attribution vector is
-    used for both start and end (the QA head selects positions so we cannot
-    run separate SLALOM calls per logit without model surgery).
+    slalom_explainer must be built around a QAModelWrapper (not the raw QA
+    model) so that SLALOM receives plain logit tensors instead of
+    QuestionAnsweringModelOutput.  The same attribution vector (derived from
+    start_logits) is used for both start and end metrics.
     """
     t0 = time.perf_counter()
 
-    # Build the combined text that mirrors the QA tokenization
+    # Build the combined text that mirrors the QA tokenization.
+    # Using the tokenizer's sep_token keeps the [SEP] boundary explicit.
     combined_text = question + " " + tokenizer.sep_token + " " + context
 
     raw = slalom_explainer.tokenize_and_explain(combined_text)
@@ -333,8 +391,11 @@ def run_benchmark(args):
     print(f"Top-k      : {args.topk}%")
     print(f"Num samples: {args.num_samples}")
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=True)
-    model     = AutoModelForQuestionAnswering.from_pretrained(args.model_name).to(device)
+    tokenizer  = AutoTokenizer.from_pretrained(args.model_name, use_fast=True)
+    qa_model   = AutoModelForQuestionAnswering.from_pretrained(args.model_name).to(device)
+    qa_model.eval()
+    # Wrap so SLALOM receives plain logit tensors instead of QA output objects.
+    model      = QAModelWrapper(qa_model)
     model.eval()
 
     slalom_explainer = SLALOMLocalExplanantions(
@@ -463,11 +524,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # ── quick demo ────────────────────────────────────────────────────────────
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device        = "cuda" if torch.cuda.is_available() else "cpu"
     tokenizer_demo = AutoTokenizer.from_pretrained(args.model_name, use_fast=True)
-    model_demo     = AutoModelForQuestionAnswering.from_pretrained(args.model_name).to(device)
+    qa_model_demo  = AutoModelForQuestionAnswering.from_pretrained(args.model_name).to(device)
+    qa_model_demo.eval()
+    model_demo     = QAModelWrapper(qa_model_demo)
     model_demo.eval()
-    slalom_demo = SLALOMLocalExplanantions(model_demo, tokenizer_demo, modes=["value", "imp"])
+    slalom_demo    = SLALOMLocalExplanantions(model_demo, tokenizer_demo, modes=["value", "imp"])
 
     demo_q = "Who invented the telephone?"
     demo_c = (
@@ -477,9 +540,8 @@ if __name__ == "__main__":
     print("\n--- SLALOM QA demo attribution ---")
     demo = slalom_explain_and_eval_qa(
         question=demo_q, context=demo_c,
-        slalom_explainer=slalom_demo, model=model_demo,
-        tokenizer=tokenizer_demo, device=device,
-        topk=args.topk, attr_mode=args.attr_mode,
+        slalom_explainer=slalom_demo, model=model_demo, tokenizer=tokenizer_demo,
+        device=device, topk=args.topk, attr_mode=args.attr_mode,
     )
     print(f"Predicted answer : {demo['predicted_answer']!r}")
     print(f"Span             : [{demo['start_idx']}, {demo['end_idx']}]")
