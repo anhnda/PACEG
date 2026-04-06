@@ -243,7 +243,6 @@ def pace_gradient_qa(
 # ---------------------------------------------------------------------------
 # Classification attribution
 # ---------------------------------------------------------------------------
-
 def pace_gradient_classification(
     sentence: str,
     a: float = 0.0,
@@ -257,11 +256,11 @@ def pace_gradient_classification(
     global cache
 
     if "distilbert" in model_name:
-        from distilbert_helper import get_inputs, get_base_token_emb, nn_forward_func
+        from distilbert_helper import get_inputs, nn_forward_func
     elif "roberta" in model_name:
-        from roberta_helper import get_inputs, get_base_token_emb, nn_forward_func
+        from roberta_helper import get_inputs, nn_forward_func
     elif "bert" in model_name:
-        from bert_helper import get_inputs, get_base_token_emb, nn_forward_func
+        from bert_helper import get_inputs, nn_forward_func
     else:
         raise NotImplementedError(f"Model {model_name} not implemented")
 
@@ -294,29 +293,25 @@ def pace_gradient_classification(
 
     L, d = X.shape[1], X.shape[2]
 
-    # --- Baseline ---
     X_RefMask = get_baseline_embedding(baseline, embed, tokenizer, X, device)  # (1, L, d)
 
-    # Predicted label
     with torch.no_grad():
-        logits0  = model(inputs_embeds=X, attention_mask=attention_mask, **extra_kwargs).logits[0]
-    pred_id     = int(logits0.argmax().item())
-    target_prob = F.softmax(logits0, dim=-1)[pred_id]
+        logits0 = model(inputs_embeds=X, attention_mask=attention_mask, **extra_kwargs).logits[0]
+    pred_id = int(logits0.argmax().item())
 
-    # Integration grid
-    t_vals     = torch.linspace(a, b, steps, device=device, dtype=X.dtype)  # (steps,)
+    t_vals     = torch.linspace(a, b, steps, device=device, dtype=X.dtype)
     coefs_base = t_vals.unsqueeze(1).expand(steps, L).clone()
-    coefs_base[:, 0]  = 1.0   # CLS
-    coefs_base[:, -1] = 1.0   # SEP
+    coefs_base[:, 0]  = 1.0
+    coefs_base[:, -1] = 1.0
 
     ex           = torch.zeros(steps, L, 1, device=device, dtype=X.dtype, requires_grad=True)
-    itepolated_o = coefs_base.unsqueeze(-1) + ex          # (steps, L, 1)
-    iterpolated  = itepolated_o.tile((1, 1, d))           # (steps, L, d)
+    itepolated_o = coefs_base.unsqueeze(-1) + ex
+    iterpolated  = itepolated_o.tile((1, 1, d))
 
     X_inter = (X.squeeze(0) * iterpolated
-               + X_RefMask.squeeze(0) * (1 - iterpolated))  # (steps, L, d)
+               + X_RefMask.squeeze(0) * (1 - iterpolated))
 
-    attn_batch = attention_mask.expand(steps, -1)
+    attn_batch  = attention_mask.expand(steps, -1)
     extra_batch = {}
     if "token_type_ids" in extra_kwargs:
         extra_batch["token_type_ids"] = extra_kwargs["token_type_ids"].expand(steps, -1)
@@ -324,36 +319,24 @@ def pace_gradient_classification(
     start_time = time.perf_counter()
 
     out          = model(inputs_embeds=X_inter, attention_mask=attn_batch, **extra_batch)
-    logits_batch = out.logits[:, pred_id]                  # (steps,)
+    logits_batch = out.logits[:, pred_id]
 
     delta    = logits_batch - torch.cat([logits_batch[:1], logits_batch[:-1]])
     delta[0] = 0.0
 
     (grad_ex,) = torch.autograd.grad(logits_batch.sum(), ex)
-    grad_ex    = grad_ex.squeeze(-1)                       # (steps, L)
+    grad_ex    = grad_ex.squeeze(-1)
 
     grad_norm = grad_ex / (grad_ex.sum(dim=1, keepdim=True) + 1e-10)
     attr      = (grad_norm * delta.unsqueeze(1)).sum(dim=0)  # (L,)
 
     end_time = time.perf_counter()
 
-    # Metrics
-    base_token_emb = get_base_token_emb(model, tokenizer, device)
+    # position/type embeddings for caller's metric calls
     inp = get_inputs(model, tokenizer, sentence, device)
     _, _, _, _, position_embed, _, type_embed, _, _ = inp
 
-    log_odd, pred_label = calculate_log_odds(
-        nn_forward_func, model, X, position_embed, type_embed,
-        attention_mask, base_token_emb, attr.detach(), topk=20
-    )
-    comp = calculate_comprehensiveness(
-        nn_forward_func, model, X, position_embed, type_embed,
-        attention_mask, base_token_emb, attr.detach(), topk=20
-    )
-    suff = calculate_sufficiency(
-        nn_forward_func, model, X, position_embed, type_embed,
-        attention_mask, base_token_emb, attr.detach(), topk=20
-    )
+    attr_full = attr.detach().clone()   # unfiltered, on device
 
     tokens = tokenizer.convert_ids_to_tokens(input_ids[0])
     if not show_special_tokens:
@@ -366,8 +349,13 @@ def pace_gradient_classification(
         "tokens":          tokens,
         "attributions":    attr.detach().cpu(),
         "time":            end_time - start_time,
-        "log_odd":         log_odd,
-        "comp":            comp,
-        "suff":            suff,
         "predicted_label": pred_id,
+        # raw tensors for eval script to compute metrics
+        "model":           model,
+        "nn_forward_func": nn_forward_func,
+        "input_embed":     X,
+        "attention_mask":  attention_mask,
+        "position_embed":  position_embed,
+        "type_embed":      type_embed,
+        "attr_full":       attr_full,
     }
