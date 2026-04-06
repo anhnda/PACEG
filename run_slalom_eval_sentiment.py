@@ -140,9 +140,8 @@ def _forward_prob(model, embed_input, attention_mask, pred_id, extra_kwargs):
         ).logits[0]
     return F.softmax(logits, dim=-1)[pred_id]
 
-
 def compute_metrics(model, tokenizer, device, input_ids, attention_mask,
-                    extra_kwargs, attr, topk=20):
+                    extra_kwargs, attr, base_emb, topk=20):
     embed = model.get_input_embeddings()
     with torch.no_grad():
         X       = embed(input_ids)
@@ -150,7 +149,6 @@ def compute_metrics(model, tokenizer, device, input_ids, attention_mask,
                         **extra_kwargs).logits[0]
     pred_id   = int(logits0.argmax().item())
     prob_orig = F.softmax(logits0, dim=-1)[pred_id]
-    base_emb  = _get_base_emb(model, tokenizer, device)
     L         = X.shape[1]
 
     special_ids = set(tokenizer.all_special_ids)
@@ -159,39 +157,38 @@ def compute_metrics(model, tokenizer, device, input_ids, attention_mask,
         device=device, dtype=torch.bool
     )
 
-    attr_rank          = attr.clone().to(device).float()
-    attr_rank[fixed]   = -float('inf')
-    k                  = max(1, int((~fixed).sum().item() * topk / 100))
-    topk_idx           = torch.topk(attr_rank, k, sorted=False).indices
+    attr_rank        = attr.clone().to(device).float()
+    attr_rank[fixed] = -float('inf')
+    k                = max(1, int((~fixed).sum().item() * topk / 100))
+    topk_idx         = torch.topk(attr_rank, k, sorted=False).indices
 
     # log-odds
-    X_lo               = X.clone()
-    X_lo[0, topk_idx]  = base_emb
-    prob_lo            = _forward_prob(model, X_lo, attention_mask, pred_id, extra_kwargs)
-    log_odd            = (torch.log(prob_lo + 1e-10) - torch.log(prob_orig + 1e-10)).item()
+    X_lo              = X.clone()
+    X_lo[0, topk_idx] = base_emb
+    prob_lo           = _forward_prob(model, X_lo, attention_mask, pred_id, extra_kwargs)
+    log_odd           = (torch.log(prob_lo + 1e-10) - torch.log(prob_orig + 1e-10)).item()
 
     # comprehensiveness
-    X_comp             = X.clone()
+    X_comp              = X.clone()
     X_comp[0, topk_idx] = base_emb
-    prob_comp          = _forward_prob(model, X_comp, attention_mask, pred_id, extra_kwargs)
-    comp               = (prob_orig - prob_comp).item()
+    prob_comp           = _forward_prob(model, X_comp, attention_mask, pred_id, extra_kwargs)
+    comp                = (prob_orig - prob_comp).item()
 
     # sufficiency
-    keep               = torch.zeros(L, dtype=torch.bool, device=device)
-    keep[topk_idx]     = True
-    keep[fixed]        = True
-    X_suff             = X.clone()
-    X_suff[0, ~keep]   = base_emb
-    prob_suff          = _forward_prob(model, X_suff, attention_mask, pred_id, extra_kwargs)
-    suff               = (prob_orig - prob_suff).item()
+    keep            = torch.zeros(L, dtype=torch.bool, device=device)
+    keep[topk_idx]  = True
+    keep[fixed]     = True
+    X_suff          = X.clone()
+    X_suff[0, ~keep] = base_emb
+    prob_suff       = _forward_prob(model, X_suff, attention_mask, pred_id, extra_kwargs)
+    suff            = (prob_orig - prob_suff).item()
 
     return log_odd, comp, suff, pred_id
-
 
 # ── Single-sample wrapper ──────────────────────────────────────────────────
 def slalom_explain_and_eval(
     text, slalom_explainer, model, tokenizer,
-    device, extra_kwargs, topk=20, attr_mode="lin",
+    device, extra_kwargs, base_emb, topk=20, attr_mode="lin",
 ):
     t0  = time.perf_counter()
     raw = slalom_explainer.tokenize_and_explain(text)
@@ -199,15 +196,13 @@ def slalom_explain_and_eval(
 
     tokens_out, values, imps = _detect_and_unpack(raw)
 
-    # build attribution vector
     if attr_mode == "value":
         attr = torch.tensor(values)
     elif attr_mode == "imp":
         attr = torch.tensor(imps)
-    else:  # "lin": linearized = value * exp(imp), paper Section B.7
+    else:
         attr = torch.tensor(values * np.exp(np.clip(imps, -20, 20)))
 
-    # tokenize for metric computation
     enc            = tokenizer(text, return_tensors="pt", truncation=True,
                                return_special_tokens_mask=True)
     enc            = {k: v.to(device) for k, v in enc.items()}
@@ -215,7 +210,6 @@ def slalom_explain_and_eval(
     attention_mask = enc["attention_mask"]
     L              = input_ids.shape[1]
 
-    # align attr length to full tokenizer output (re-insert 0 at specials if needed)
     if attr.shape[0] != L:
         special_ids_set = set(tokenizer.all_special_ids)
         keep_idx        = [i for i, tid in enumerate(input_ids[0].tolist())
@@ -228,7 +222,7 @@ def slalom_explain_and_eval(
     log_odd, comp, suff, pred_id = compute_metrics(
         model, tokenizer, device,
         input_ids, attention_mask, extra_kwargs,
-        attr, topk=topk,
+        attr, base_emb, topk=topk,
     )
 
     return {
@@ -247,10 +241,11 @@ def slalom_explain_and_eval(
 # ── Benchmark loop ─────────────────────────────────────────────────────────
 def run_benchmark(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Device     : {device}")
-    print(f"Model      : {args.model} / {args.dataset}")
-    print(f"SLALOM mode: {args.attr_mode}")
-    print(f"Top-k      : {args.topk}%")
+    print(f"Device        : {device}")
+    print(f"Model         : {args.model} / {args.dataset}")
+    print(f"SLALOM mode   : {args.attr_mode}")
+    print(f"Top-k         : {args.topk}%")
+    print(f"Eval baseline : {args.eval_baseline}")
 
     model_name = MODEL_NAMES[(args.model, args.dataset)]
     tokenizer  = AutoTokenizer.from_pretrained(model_name, use_fast=True)
@@ -261,6 +256,17 @@ def run_benchmark(args):
 
     fwd_params   = inspect.signature(model.forward).parameters
     extra_kwargs = {}
+
+    # Build base_emb once from eval_baseline
+    from pace_gradients import get_baseline_embedding
+    embed = model.get_input_embeddings()
+    with torch.no_grad():
+        dummy_ids = torch.tensor([[tokenizer.cls_token_id or 0]], device=device)
+        dummy_X   = embed(dummy_ids)   # (1, 1, d)
+
+    base_emb = get_baseline_embedding(
+        args.eval_baseline, embed, tokenizer, dummy_X, device
+    )[0, 0, :]   # (d,) — compute_metrics uses base_emb directly as a row vector
 
     slalom_explainer = SLALOMLocalExplanantions(
         model, tokenizer, modes=["value", "imp"]
@@ -279,7 +285,7 @@ def run_benchmark(args):
 
     if len(data) > args.num_samples:
         data = random.sample(data, args.num_samples)
-    print(f"Samples    : {len(data)}")
+    print(f"Samples       : {len(data)}")
 
     total_log_odd = total_comp = total_suff = total_time = 0.0
     count = errors = 0
@@ -294,6 +300,7 @@ def run_benchmark(args):
                 tokenizer=tokenizer,
                 device=device,
                 extra_kwargs=extra_kwargs,
+                base_emb=base_emb,
                 topk=args.topk,
                 attr_mode=args.attr_mode,
             )
@@ -327,14 +334,17 @@ def run_benchmark(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model",   choices=["distilbert","bert","roberta"],
+    parser.add_argument("--model",        choices=["distilbert", "bert", "roberta"],
                         default="distilbert")
-    parser.add_argument("--dataset", choices=["sst2","imdb","rotten"],
+    parser.add_argument("--dataset",      choices=["sst2", "imdb", "rotten"],
                         default="sst2")
-    parser.add_argument("--num_samples", type=int, default=1000)
-    parser.add_argument("--topk",        type=int, default=20)
-    parser.add_argument("--attr_mode",   choices=["value","imp","lin"],
+    parser.add_argument("--num_samples",  type=int, default=1000)
+    parser.add_argument("--topk",         type=int, default=20)
+    parser.add_argument("--attr_mode",    choices=["value", "imp", "lin"],
                         default="lin")
-    parser.add_argument("--print_step",  type=int, default=100)
+    parser.add_argument("--print_step",   type=int, default=100)
+    parser.add_argument("--eval-baseline", type=str, default="mask",
+                        choices=["mask", "pad", "zero", "mean", "random"],
+                        help="Baseline embedding used to replace tokens in faithfulness metrics")
     args = parser.parse_args()
     run_benchmark(args)
