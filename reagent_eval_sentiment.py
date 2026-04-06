@@ -354,7 +354,6 @@ def _get_helper_fns(model_name: str):
         raise NotImplementedError(f"No helper module for model: {model_name}")
     return get_inputs, get_base_token_emb, nn_forward_func
 
-
 def _compute_faithfulness_metrics(
     clf_model,
     clf_tokenizer,
@@ -364,43 +363,27 @@ def _compute_faithfulness_metrics(
     attention_mask: torch.Tensor,
     importance: np.ndarray,
     device: str,
+    eval_base_token_emb: torch.Tensor,   # (1, d) — passed from caller
     topk_pct: int = 20,
 ) -> tuple[float, float, float, int]:
-    """
-    Compute log-odds, comprehensiveness, sufficiency via xai_metrics helpers.
-    This matches the exact call pattern of attcat_eval_sentiment.py and
-    pace_gradients.py, ensuring metrics are comparable across all methods.
+    get_inputs, _, nn_forward_func = _get_helper_fns(model_name)
 
-    Returns (log_odd, comp, suff, pred_id).
-    """
-    get_inputs, get_base_token_emb, nn_forward_func = _get_helper_fns(model_name)
-
-    # Get embedding matrix input (same as other eval scripts)
     embed = clf_model.get_input_embeddings()
     with torch.no_grad():
-        X = embed(input_ids.to(device))                        # (1, L, D)
+        X = embed(input_ids.to(device))
         logits0 = clf_model(
             inputs_embeds=X, attention_mask=attention_mask.to(device)
         ).logits[0]
     pred_id = int(logits0.argmax().item())
 
-    base_token_emb = get_base_token_emb(clf_model, clf_tokenizer, device)
     inp = get_inputs(clf_model, clf_tokenizer, sentence, device)
-    # inp unpacking: (input_ids, ref_ids, token_type_ids, ref_type_ids,
-    #                 position_emb, ref_position_emb, type_emb, ref_type_emb, attention_mask)
     _, _, _, _, position_embed, _, type_embed, _, _ = inp
 
-    # Guarantee every tensor is on `device` (CUDA) — the model weights live there,
-    # and nn_forward_func passes these directly into LayerNorm / attention.
-    # get_inputs() and get_base_token_emb() may or may not honour `device`
-    # depending on the helper implementation, so we enforce it explicitly.
     X              = X.to(device)
     position_embed = position_embed.to(device) if position_embed is not None else None
     type_embed     = type_embed.to(device)     if type_embed     is not None else None
-    base_token_emb = base_token_emb.to(device)
+    base_token_emb = eval_base_token_emb.to(device)   # use caller-supplied baseline
 
-    # attr_full drives topk() inside xai_metrics → produces index tensor on `device`.
-    # attention_mask[0][mask] then requires attention_mask on the same device.
     attr_full        = torch.tensor(importance, dtype=torch.float32, device=device)
     attention_mask_d = attention_mask.to(device)
 
@@ -419,70 +402,41 @@ def _compute_faithfulness_metrics(
 
     return log_odd, comp, suff, pred_id
 
-
 # ── Public API ─────────────────────────────────────────────────────────────
-
 def reagent_classification(
     sentence: str,
     model_name: str,
     top_k: int = 3,
     topk_pct: int = 20,
-    mlm_name: str | None = None,   # None → auto-resolved from model_name
+    mlm_name: str | None = None,
     show_special_tokens: bool = False,
     device: str | None = None,
+    eval_base_token_emb: torch.Tensor | None = None,   # (1, d) or None
 ) -> dict:
-    """
-    Run ReAGent-style feature attribution on a BERT-based classifier.
-
-    Args:
-        sentence:            Input text to explain.
-        model_name:          HuggingFace classifier model name/path.
-        top_k:               Number of MLM replacement candidates per token.
-                             Original paper uses top_k=3 (config: top3_replace0.1).
-        topk_pct:            Percentage of tokens to ablate for eval metrics.
-        mlm_name:            MLM oracle for generating replacements.
-                             Defaults to the classifier checkpoint itself (no extra download).
-        show_special_tokens: Whether to include [CLS]/[SEP] in output.
-        device:              Torch device; auto-detected if None.
-
-    Returns dict with keys:
-        tokens       — list[str]
-        attributions — list[float]  Hellinger importance per token
-        predicted_label — int
-        log_odd, comp, suff — float  faithfulness metrics
-        time         — float  wall-clock seconds
-    """
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
     t0 = time.perf_counter()
 
-    # ── MLM oracle = classifier checkpoint itself (zero extra download) ──
     if mlm_name is None:
         mlm_name = model_name
 
-    # ── Load models ──
     clf_tokenizer, clf_model = _load_clf(model_name, device)
     mlm_tokenizer, mlm_model = _load_mlm(mlm_name, device)
 
-    # ── Tokenize input ──
     enc = clf_tokenizer(
         sentence,
         return_tensors="pt",
         truncation=True,
         return_special_tokens_mask=True,
     )
-    input_ids      = enc["input_ids"]        # (1, L)
-    attention_mask = enc["attention_mask"]   # (1, L)
+    input_ids      = enc["input_ids"]
+    attention_mask = enc["attention_mask"]
+    clf_tokens     = clf_tokenizer.convert_ids_to_tokens(input_ids[0].tolist())
 
-    # Decoded token strings (used by MLM oracle and output)
-    clf_tokens = clf_tokenizer.convert_ids_to_tokens(input_ids[0].tolist())
-
-    # ── Original label distribution ──
     p_orig = _get_label_dist(clf_model, clf_tokenizer,
                              input_ids, attention_mask, device)
 
-    # ── Per-token Hellinger importance ──
     importance = _compute_importance_scores(
         clf_tokenizer, clf_model,
         mlm_tokenizer, mlm_model,
@@ -490,22 +444,24 @@ def reagent_classification(
         p_orig, top_k, device,
     )
 
-    # ── Faithfulness metrics (via xai_metrics, same path as AttCAT/PACE) ──
+    # Build eval_base_token_emb from mask if not supplied (preserves original behaviour)
+    if eval_base_token_emb is None:
+        _, get_base_token_emb, _ = _get_helper_fns(model_name)
+        eval_base_token_emb = get_base_token_emb(clf_model, clf_tokenizer, device)
+
     log_odd, comp, suff, pred_id = _compute_faithfulness_metrics(
         clf_model, clf_tokenizer, model_name, sentence,
         input_ids, attention_mask,
-        importance, device, topk_pct,
+        importance, device,
+        eval_base_token_emb=eval_base_token_emb,
+        topk_pct=topk_pct,
     )
 
     t1 = time.perf_counter()
 
-    # ── Build output (optionally filter specials) ──
     special_ids = set(clf_tokenizer.all_special_ids)
-    out_tokens = []
-    out_attr   = []
-    for tok_str, tok_id, imp in zip(
-        clf_tokens, input_ids[0].tolist(), importance.tolist()
-    ):
+    out_tokens, out_attr = [], []
+    for tok_str, tok_id, imp in zip(clf_tokens, input_ids[0].tolist(), importance.tolist()):
         if not show_special_tokens and tok_id in special_ids:
             continue
         out_tokens.append(tok_str)
@@ -521,21 +477,32 @@ def reagent_classification(
         "time":            t1 - t0,
     }
 
-
 # ── Benchmark loop (matches PACE main script structure) ───────────────────
-
 def run_benchmark(args):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device     = "cuda" if torch.cuda.is_available() else "cpu"
     model_name = MODEL_NAMES[(args.model, args.dataset)]
-    print(f"Device    : {device}")
-    print(f"Classifier: {model_name}")
-    resolved_mlm = _resolve_mlm_name(args.model, model_name)
-    print(f"MLM oracle: {resolved_mlm}  (top_k={args.top_k})")
-    print(f"Dataset   : {args.dataset}")
+    print(f"Device        : {device}")
+    print(f"Classifier    : {model_name}")
+    print(f"MLM oracle    : {model_name}  (top_k={args.top_k})")
+    print(f"Dataset       : {args.dataset}")
+    print(f"Eval baseline : {args.eval_baseline}")
 
-    # Pre-load both models
     _load_clf(model_name, device)
-    _load_mlm(resolved_mlm, device)
+    _load_mlm(model_name, device)
+
+    # Build eval_base_token_emb once
+    from pace_gradients import get_baseline_embedding
+    clf_tokenizer = _clf_cache[model_name]["tokenizer"]
+    clf_model     = _clf_cache[model_name]["model"]
+    embed         = clf_model.get_input_embeddings()
+
+    with torch.no_grad():
+        dummy_ids = torch.tensor([[clf_tokenizer.cls_token_id or 0]], device=device)
+        dummy_X   = embed(dummy_ids)   # (1, 1, d)
+
+    eval_base_token_emb = get_baseline_embedding(
+        args.eval_baseline, embed, clf_tokenizer, dummy_X, device
+    )[0, 0:1, :]   # (1, d)
 
     if args.dataset == "imdb":
         dataset = load_dataset("imdb")["test"]
@@ -550,7 +517,7 @@ def run_benchmark(args):
 
     if len(data) > args.num_samples:
         data = random.sample(data, args.num_samples)
-    print(f"Samples   : {len(data)}")
+    print(f"Samples       : {len(data)}")
 
     log_odds = comps = suffs = total_time = 0.0
     count = errors = 0
@@ -566,6 +533,7 @@ def run_benchmark(args):
                 topk_pct=args.topk_pct,
                 device=device,
                 show_special_tokens=False,
+                eval_base_token_emb=eval_base_token_emb,
             )
             log_odds   += res["log_odd"]
             comps      += res["comp"]
@@ -596,6 +564,21 @@ def run_benchmark(args):
         print(f"  Evaluated        : {count}  |  Errors: {errors}")
         print(f"{'─'*52}")
 
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model",        choices=["distilbert", "bert", "roberta"],
+                        default="distilbert")
+    parser.add_argument("--dataset",      choices=["sst2", "imdb", "rotten"],
+                        default="sst2")
+    parser.add_argument("--top_k",        type=int, default=3)
+    parser.add_argument("--topk_pct",     type=int, default=20)
+    parser.add_argument("--num_samples",  type=int, default=1000)
+    parser.add_argument("--eval-baseline", type=str, default="mask",
+                        choices=["mask", "pad", "zero", "mean", "random"],
+                        help="Baseline embedding used to replace tokens in faithfulness metrics")
+    args = parser.parse_args()
+    run_benchmark(args)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
