@@ -66,14 +66,17 @@ def _build_base_embed(
     eos_token_id: int,
     device: str,
 ) -> torch.Tensor:
+    # embed_layer lives on the model's device, not necessarily `device` arg
+    embed_device = next(embed_layer.parameters()).device
+
     if baseline == "zero":
         return torch.zeros_like(input_embed)
     elif baseline == "pad":
-        pad_id  = torch.tensor([[eos_token_id]], device=device)
-        pad_vec = embed_layer(pad_id).detach()
+        pad_id  = torch.tensor([[eos_token_id]], device=embed_device)
+        pad_vec = embed_layer(pad_id).detach().cpu()   # always return CPU
         return pad_vec.expand_as(input_embed).clone()
     elif baseline == "mean":
-        mean_vec = embed_layer.weight.mean(dim=0, keepdim=True)
+        mean_vec = embed_layer.weight.mean(dim=0, keepdim=True).detach().cpu()  # CPU
         return mean_vec.unsqueeze(0).expand_as(input_embed).clone()
     else:
         raise ValueError(f"Unknown baseline '{baseline}'. Choose: zero | pad | mean")
