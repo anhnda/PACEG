@@ -383,6 +383,8 @@ def slalom_explain_and_eval_qa(
 # ---------------------------------------------------------------------------
 
 def run_benchmark(args):
+    print("NO SLALOM for QA TASKS\n")
+    exit()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device     : {device}")
     print(f"Model      : {args.model_name}")
