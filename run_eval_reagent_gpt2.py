@@ -1,22 +1,12 @@
 """
 run_eval_reagent_gpt2.py
 ========================
-Benchmark ReAGent-style occlusion attribution on decoder-only GPT-2
-using the TellMeWhy dataset loaded from a local raw-text file.
+Benchmark ReAGent-style occlusion attribution on GPT-2 + TellMeWhy.
+Supports --baseline (method) and --eval-baseline (faithfulness metrics).
 
-Mirrors run_eval_pg_gpt2.py exactly so Soft-NC, Soft-NS, and Log-odds
-results are directly comparable between PACE Gradient and ReAGent.
-
-Dataset format  (datasets2/tellmewhy2.txt)
-------------------------------------------
-One sample per line:
-    <narrative sentences>  Why did <subject> <verb>?[<TAB><gold answer>]
-
-Usage
------
-    python run_eval_reagent_gpt2.py --num_samples 20 --use_gold --verbose
-    python run_eval_reagent_gpt2.py --model_name gpt2-medium --num_samples 200
-    python run_eval_reagent_gpt2.py --model_name ./model--gpt2 --use_gold
+Usage:
+    python run_eval_reagent_gpt2.py --num_samples 200 --use_gold
+    python run_eval_reagent_gpt2.py --baseline pad --eval-baseline mean
 """
 
 import random
@@ -27,25 +17,19 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from reagent_gpt2 import reagent_gpt2, get_model_tokenizer
+from reagent_gpt2 import reagent_gpt2, get_model_tokenizer, _build_base_embed
 from xai_metrics_gpt2 import calculate_all_metrics_gpt2
 
-# ── reproducibility ──────────────────────────────────────────────────────────
 random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Dataset loader  (identical to run_eval_pg_gpt2.py)
+# Dataset loader  (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_tellmewhy_txt(path: str, num_samples: int, use_gold: bool) -> list:
-    """
-    Load TellMeWhy samples from the local plain-text file.
-
-    Each line:  "<narrative> Why did X?"  [TAB  "<gold answer>"]
-    """
     samples = []
     with open(path, "r", encoding="utf-8") as fh:
         for raw in fh:
@@ -58,10 +42,8 @@ def load_tellmewhy_txt(path: str, num_samples: int, use_gold: bool) -> list:
             if not prompt:
                 continue
             samples.append({"question": prompt, "gold_answer": gold_ans})
-
     if len(samples) > num_samples:
         samples = random.sample(samples, num_samples)
-
     print(f"Loaded {len(samples)} samples from {path}")
     return samples
 
@@ -71,31 +53,34 @@ def load_tellmewhy_txt(path: str, num_samples: int, use_gold: bool) -> list:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_single_example(
-    question:       str,
+    question:        str,
     gold_answer,
-    model_name:     str,
-    device:         str,
-    topk:           int,
-    max_new_tokens: int,
-    n_samples:      int,
+    model_name:      str,
+    device:          str,
+    topk:            int,
+    max_new_tokens:  int,
+    n_samples:       int,
+    baseline:        str,
+    eval_base_embed: torch.Tensor,   # (1, T, D) or (1, 1, D) — broadcast by metrics
 ) -> dict:
-    """
-    Full ReAGent pipeline for one sample:
-        1. reagent_gpt2()               — occlusion importance scores
-        2. calculate_all_metrics_gpt2() — Soft-NC, Soft-NS, Log-odds
-    """
     res = reagent_gpt2(
         question=question,
         model_name=model_name,
         device=device,
         max_new_tokens=max_new_tokens,
         gold_answer=gold_answer,
+        baseline=baseline,
     )
+
+    # Override base_embed with eval_base_embed for metric calls
+    # Expand to match sequence length if needed
+    T          = res["input_embed"].shape[1]
+    eval_base  = eval_base_embed.expand(1, T, -1)   # (1, T, D)
 
     metrics = calculate_all_metrics_gpt2(
         model=res["model"],
         input_embed=res["input_embed"],
-        base_embed=res["base_embed"],
+        base_embed=eval_base,
         attributions=res["attributions"],
         answer_ids=res["answer_ids"],
         answer_positions=res["answer_positions"],
@@ -130,14 +115,27 @@ def run_benchmark(args) -> None:
     print(f"Model         : {args.model_name}")
     print(f"Dataset       : {args.data_path}")
     print(f"Samples       : {args.num_samples}")
-    print(f"topk %        : {args.topk}  (metric ablation)")
+    print(f"Top-k %       : {args.topk}")
+    print(f"Baseline      : {args.baseline}")
+    print(f"Eval baseline : {args.eval_baseline}")
     print(f"Gold answer   : {args.use_gold}")
     print(f"MC samples    : {args.n_samples}")
     print("=" * 60)
 
     print("\nLoading model ...")
-    get_model_tokenizer(args.model_name, device)
+    model, tokenizer = get_model_tokenizer(args.model_name, device)
     print("Model loaded.\n")
+
+    # Build eval_base_embed once — shape (1, 1, D), broadcast to (1, T, D) per sample
+    embed_layer = model.transformer.wte
+    with torch.no_grad():
+        dummy_embed = embed_layer(
+            torch.tensor([[tokenizer.eos_token_id]], device=device)
+        ).detach().cpu()   # (1, 1, D) — shape reference
+
+    eval_base_embed = _build_base_embed(
+        embed_layer, dummy_embed, args.eval_baseline, tokenizer, device="cpu"
+    )   # (1, 1, D)
 
     samples = load_tellmewhy_txt(
         args.data_path,
@@ -158,13 +156,15 @@ def run_benchmark(args) -> None:
     for idx, sample in enumerate(tqdm(samples, desc="ReAGent")):
         try:
             res = run_single_example(
-                question       = sample["question"],
-                gold_answer    = sample["gold_answer"],
-                model_name     = args.model_name,
-                device         = device,
-                topk           = args.topk,
-                max_new_tokens = args.max_new_tokens,
-                n_samples      = args.n_samples,
+                question        = sample["question"],
+                gold_answer     = sample["gold_answer"],
+                model_name      = args.model_name,
+                device          = device,
+                topk            = args.topk,
+                max_new_tokens  = args.max_new_tokens,
+                n_samples       = args.n_samples,
+                baseline        = args.baseline,
+                eval_base_embed = eval_base_embed,
             )
 
             total_soft_nc  += res["soft_nc"]
@@ -204,7 +204,7 @@ def run_benchmark(args) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Printing helpers
+# Printing helpers  (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _print_running(count, total, snc, sns, lo, t):
@@ -219,19 +219,14 @@ def _print_sample(question: str, res: dict):
     tokens = res["tokens"]
     scores = res["attributions"].tolist()
     q_len  = res["q_len"]
-
     print(f"\n{'─' * 60}")
     print(f"Q : {question[:120]}")
     print(f"A : {res['predicted_answer']}")
-
-    q_scores = sorted(
-        zip(tokens[:q_len], scores[:q_len]),
-        key=lambda x: x[1], reverse=True
-    )
+    q_scores = sorted(zip(tokens[:q_len], scores[:q_len]),
+                      key=lambda x: x[1], reverse=True)
     print("Top-5 Q tokens by ReAGent attribution:")
     for tok, sc in q_scores[:5]:
         print(f"    {tok!r:20s}  {sc:.4f}")
-
     print(f"Soft-NC={res['soft_nc']:.4f}  "
           f"Soft-NS={res['soft_ns']:.4f}  "
           f"Log-odds={res['log_odds']:.4f}  "
@@ -246,45 +241,25 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Benchmark ReAGent Attribution on GPT-2 + TellMeWhy"
     )
-    parser.add_argument(
-        "--data_path", type=str,
-        default="datasets2/tellmewhy2.txt",
-        help="Path to local TellMeWhy raw-text file "
-             "(default: datasets2/tellmewhy2.txt)"
-    )
-    parser.add_argument(
-        "--model_name", type=str, default="gpt2",
-        help="GPT-2 variant or local path: gpt2 | gpt2-medium | ./model--gpt2"
-    )
-    parser.add_argument(
-        "--num_samples", type=int, default=200,
-        help="Max samples to evaluate (default: 200)"
-    )
-    parser.add_argument(
-        "--topk", type=int, default=20,
-        help="Percentage of top Q-tokens to mask for log-odds (default: 20)"
-    )
-    parser.add_argument(
-        "--max_new_tokens", type=int, default=30,
-        help="Max tokens to generate for each answer (default: 30)"
-    )
-    parser.add_argument(
-        "--n_samples", type=int, default=10,
-        help="Monte-Carlo draws for Soft-NC/NS Bernoulli perturbation "
-             "(default: 10)"
-    )
-    parser.add_argument(
-        "--use_gold", action="store_true",
-        help="Use tab-separated gold answers from the txt file if available"
-    )
-    parser.add_argument(
-        "--print_step", type=int, default=50,
-        help="Print running averages every N samples (default: 50)"
-    )
-    parser.add_argument(
-        "--verbose", action="store_true",
-        help="Print attribution details for first 3 samples"
-    )
-
+    parser.add_argument("--data_path",     type=str,
+                        default="datasets2/tellmewhy2.txt")
+    parser.add_argument("--model_name",    type=str, default="gpt2",
+                        help="gpt2 | gpt2-medium | gpt2-large | ./local-model")
+    parser.add_argument("--num_samples",   type=int, default=200)
+    parser.add_argument("--topk",          type=int, default=20)
+    parser.add_argument("--max_new_tokens",type=int, default=30)
+    parser.add_argument("--n_samples",     type=int, default=10,
+                        help="Monte-Carlo draws for Soft-NC/NS")
+    parser.add_argument("--use_gold",      action="store_true")
+    parser.add_argument("--print_step",    type=int, default=50)
+    parser.add_argument("--verbose",       action="store_true")
+    parser.add_argument("--baseline",      type=str, default="zero",
+                        choices=["zero", "pad", "mean"],
+                        help="Baseline for base_embed returned by reagent_gpt2 "
+                             "(affects method's embedding reference)")
+    parser.add_argument("--eval-baseline", type=str, default="zero",
+                        choices=["zero", "pad", "mean"],
+                        help="Baseline embedding used to replace tokens in "
+                             "faithfulness metrics (Soft-NC, Soft-NS, log-odds)")
     args = parser.parse_args()
     run_benchmark(args)
