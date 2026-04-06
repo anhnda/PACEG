@@ -143,7 +143,28 @@ def _cholesky_safe(cov: torch.Tensor) -> torch.Tensor:
 # ---------------------------------------------------------------------------
 # Core FI attribution
 # ---------------------------------------------------------------------------
-
+def _build_base_embed(
+    embed_layer: torch.nn.Embedding,
+    input_embed: torch.Tensor,   # (1, T, D) — shape/dtype reference
+    baseline: str,
+    eos_token_id: int,
+    device: str,
+) -> torch.Tensor:
+    """
+    Build baseline embedding (1, T, D).
+    baseline : 'zero' | 'pad' | 'mean'
+    """
+    if baseline == "zero":
+        return torch.zeros_like(input_embed)
+    elif baseline == "pad":
+        pad_id  = torch.tensor([[eos_token_id]], device=device)
+        pad_vec = embed_layer(pad_id).detach()             # (1, 1, D)
+        return pad_vec.expand_as(input_embed).clone()
+    elif baseline == "mean":
+        mean_vec = embed_layer.weight.mean(dim=0, keepdim=True)   # (1, D)
+        return mean_vec.unsqueeze(0).expand_as(input_embed).clone()
+    else:
+        raise ValueError(f"Unknown baseline '{baseline}'. Choose: zero | pad | mean")
 def fi_gradient_gpt2(
     question: str,
     model_name: str = "gpt2",
@@ -155,6 +176,7 @@ def fi_gradient_gpt2(
     method: str = "fi",
     covariance: Optional[Union[torch.Tensor, np.ndarray]] = None,
     per_token_cov: bool = False,
+    baseline: str = "zero",   
 ) -> dict:
     """
     Functional Information attribution for one (question, answer) pair on GPT-2.
@@ -228,11 +250,13 @@ def fi_gradient_gpt2(
     embed_layer = model.transformer.wte            # nn.Embedding [V, D]
 
     with torch.no_grad():
-        input_embed = embed_layer(full_ids).detach()  # [1, T, D]
+        input_embed = embed_layer(full_ids).detach()   # (1, T, D)
 
-    # base_embed: zero vector (IG convention; not used for FI noise but
-    # kept for metric compatibility with xai_metrics_gpt2.py)
-    base_embed = torch.zeros_like(input_embed)
+    # baseline embedding — replaces hardcoded zeros
+    base_embed = _build_base_embed(
+        embed_layer, input_embed, baseline,
+        tokenizer.eos_token_id, device
+    ).detach()
 
     # ------------------------------------------------------------------
     # 4. Reference logits (no grad)
