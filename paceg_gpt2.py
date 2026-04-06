@@ -46,7 +46,8 @@ def get_model_tokenizer(
     device: str = "cpu",
 ):
     """Return (model, tokenizer), loading from HuggingFace only once."""
-    key = (model_name, device)
+    device = str(torch.device(device))   # normalizes "cuda" -> "cuda:0", "cpu" -> "cpu"
+    key = (model_name, device, type)   
     if key not in _CACHE:
         tok = GPT2TokenizerFast.from_pretrained(model_name)
         tok.pad_token = tok.eos_token          # GPT-2 has no pad token

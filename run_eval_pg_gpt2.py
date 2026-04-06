@@ -182,6 +182,7 @@ def run_single_example(
 
 def run_benchmark(args) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(torch.device(device))   # normalize once, use everywhere
     print(f"Device      : {device}")
     print(f"Model       : {args.model_name}")
     print(f"Dataset     : {args.data_path}")
