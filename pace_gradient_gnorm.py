@@ -24,6 +24,12 @@ safe_norm    Zero-safe signed-sum normalisation:
                  grad_ex / (0 if sum==0 → eps, else sum)
                  Equivalent to sign_norm but with an explicit zero guard instead
                  of the additive eps, preventing any bias on all-zero steps.
+
+square_norm  Squared-gradient softmax-like normalisation:
+                 grad_ex**2 / (grad_ex**2).sum(dim=1, keepdim=True) + 1e-10)
+                 Attributions are non-negative and sum to ~1 per step.
+                 Amplifies large-magnitude gate gradients and suppresses small
+                 ones, acting as a soft selection over tokens.
 """
 
 import time
@@ -44,7 +50,7 @@ torch.backends.cuda.enable_flash_sdp(False)
 torch.backends.cuda.enable_mem_efficient_sdp(False)
 torch.backends.cuda.enable_math_sdp(True)
 
-_GNORM_MODES = ("sign_norm", "sign_magl2", "sign_magl1", "safe_norm")
+_GNORM_MODES = ("sign_norm", "sign_magl2", "sign_magl1", "safe_norm", "square_norm")
 
 _cache: Dict[str, dict] = {}
 
@@ -112,6 +118,13 @@ def _normalise(grad_ex: torch.Tensor, mode: str) -> torch.Tensor:
                               row_sum)
         return grad_ex / denom
 
+    elif mode == "square_norm":
+        # Squared-gradient normalisation: grad^2 / sum(grad^2)
+        # Non-negative outputs that sum to ~1 per step; amplifies large grads
+        grad_sq = grad_ex ** 2                               # (steps, L)
+        denom   = grad_sq.sum(dim=1, keepdim=True) + 1e-10  # (steps, 1)
+        return grad_sq / denom
+
     else:
         raise ValueError(
             f"Unknown gnorm mode '{mode}'. Choose from: {_GNORM_MODES}"
@@ -131,7 +144,7 @@ def pace_gradient_gnorm(
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     show_special_tokens: bool = False,
     baseline: str = "mask",
-    gnorm: Literal["sign_norm", "sign_magl2", "sign_magl1", "safe_norm"] = "sign_norm",
+    gnorm: Literal["sign_norm", "sign_magl2", "sign_magl1", "safe_norm", "square_norm"] = "sign_norm",
 ) -> Dict[str, Any]:
     """
     PACE classification attribution with a configurable scalar-gate gradient

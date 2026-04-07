@@ -63,10 +63,11 @@ MODEL_NAMES = {
 
 # Human-readable descriptions shown in the header/summary
 _GNORM_LABELS = {
-    "sign_norm":  "signed-sum + eps        (original PACE)",
-    "sign_magl2": "L2-magnitude across tokens + eps",
-    "sign_magl1": "L1-magnitude across tokens + eps",
-    "safe_norm":  "zero-safe signed-sum    (no eps bias)",
+    "sign_norm":   "signed-sum + eps        (original PACE)",
+    "sign_magl2":  "L2-magnitude across tokens + eps",
+    "sign_magl1":  "L1-magnitude across tokens + eps",
+    "safe_norm":   "zero-safe signed-sum    (no eps bias)",
+    "square_norm": "grad² / sum(grad²)      (non-negative, sums to ~1)",
 }
 
 
@@ -109,7 +110,8 @@ def main():
             "  sign_norm   — signed sum + eps  (original PACE default)\n"
             "  sign_magl2  — L2-norm across tokens + eps\n"
             "  sign_magl1  — L1-norm across tokens + eps\n"
-            "  safe_norm   — zero-safe signed sum (no eps on non-zero steps)"
+            "  safe_norm   — zero-safe signed sum (no eps on non-zero steps)\n"
+            "  square_norm — grad² / sum(grad²)  (non-negative, sums to ~1)"
         ),
     )
     parser.add_argument("--model",   type=str, default="distilbert",
