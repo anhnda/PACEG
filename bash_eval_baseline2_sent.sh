@@ -10,7 +10,7 @@ scripts=(
 )
 
 # Define the list of models
-models=("bert" "roberta" "distillbert")
+models=("bert" "roberta" "distilbert")
 
 # Define the list of possible methods for evaluation
 methods=("mask" "pad" "zero" "mean")
