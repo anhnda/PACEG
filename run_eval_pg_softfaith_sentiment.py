@@ -8,7 +8,7 @@ from datasets import load_dataset
 from xai_metrics import *
 from pace_gradients import pace_gradient_classification, get_baseline_embedding
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from soft_faith import (
+from soft_faith_metrics import (
     calculate_soft_log_odds,
     calculate_soft_comprehensiveness,
     calculate_soft_sufficiency,
