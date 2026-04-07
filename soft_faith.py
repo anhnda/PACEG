@@ -8,11 +8,9 @@ Soft Normalized Sufficiency (Soft-NS) and Soft Normalized Comprehensiveness
   Faithfulness Metrics", ACL 2023.
   https://github.com/casszhao/SoftFaith
 
-nn_forward_func signature (from bert_helper / distilbert_helper / roberta_helper):
-    nn_forward_func(model, input_embed, position_embed, type_embed, attention_mask)
-    -> logits
-
-This matches exactly how xai_metrics.py calls it.
+nn_forward_func signature (bert_helper / distilbert_helper / roberta_helper):
+    nn_forward_func(model, input_embed, attention_mask=None,
+                    position_embed=None, type_embed=None, ...)
 """
 
 import torch
@@ -34,6 +32,24 @@ def _normalize_scores(attr: torch.Tensor) -> torch.Tensor:
     return (attr - a_min) / (a_max - a_min)
 
 
+def _call_forward(
+    nn_forward_func: Callable,
+    model,
+    input_embed: torch.Tensor,
+    position_embed: torch.Tensor,
+    type_embed: Optional[torch.Tensor],
+    attention_mask: torch.Tensor,
+) -> torch.Tensor:
+    """Call nn_forward_func with keyword args matching bert_helper signature."""
+    return nn_forward_func(
+        model,
+        input_embed,
+        attention_mask=attention_mask,
+        position_embed=position_embed,
+        type_embed=type_embed,
+    )
+
+
 def _get_predicted_class_and_prob(
     nn_forward_func: Callable,
     model,
@@ -44,7 +60,7 @@ def _get_predicted_class_and_prob(
 ):
     """Return (pred_class, p_full) on the unperturbed input."""
     with torch.no_grad():
-        logits     = nn_forward_func(model, input_embed, position_embed, type_embed, attention_mask)
+        logits     = _call_forward(nn_forward_func, model, input_embed, position_embed, type_embed, attention_mask)
         probs      = F.softmax(logits, dim=-1)
         pred_class = int(probs.argmax(dim=-1).item())
         p_full     = float(probs[0, pred_class].item())
@@ -62,7 +78,7 @@ def _get_prob_from_embed(
 ) -> float:
     """Return p(pred_class) given a perturbed token embedding."""
     with torch.no_grad():
-        logits = nn_forward_func(model, perturbed_embed, position_embed, type_embed, attention_mask)
+        logits = _call_forward(nn_forward_func, model, perturbed_embed, position_embed, type_embed, attention_mask)
         probs  = F.softmax(logits, dim=-1)
         return float(probs[0, pred_class].item())
 
@@ -122,7 +138,7 @@ def soft_input_perturbation(
     q      = scores if mode == "sufficiency" else 1.0 - scores
 
     device = token_embeddings.device
-    # Bernoulli mask: (seq_len,) -> (1, seq_len, 1) to broadcast over hidden dim
+    # Bernoulli mask: (seq_len,) -> (1, seq_len, 1) broadcasts over hidden dim
     mask = torch.bernoulli(q.to(device))              # (seq_len,)
     mask = mask.unsqueeze(0).unsqueeze(-1)            # (1, seq_len, 1)
 
