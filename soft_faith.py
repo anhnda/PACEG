@@ -8,9 +8,11 @@ Soft Normalized Sufficiency (Soft-NS) and Soft Normalized Comprehensiveness
   Faithfulness Metrics", ACL 2023.
   https://github.com/casszhao/SoftFaith
 
-nn_forward_func signature (from bert_helper.py):
-    nn_forward_func(input_embed, position_embed, type_embed, attention_mask)
-    -> logits  (no model argument)
+nn_forward_func signature (from bert_helper / distilbert_helper / roberta_helper):
+    nn_forward_func(model, input_embed, position_embed, type_embed, attention_mask)
+    -> logits
+
+This matches exactly how xai_metrics.py calls it.
 """
 
 import torch
@@ -34,6 +36,7 @@ def _normalize_scores(attr: torch.Tensor) -> torch.Tensor:
 
 def _get_predicted_class_and_prob(
     nn_forward_func: Callable,
+    model,
     input_embed: torch.Tensor,
     position_embed: torch.Tensor,
     type_embed: Optional[torch.Tensor],
@@ -41,9 +44,7 @@ def _get_predicted_class_and_prob(
 ):
     """Return (pred_class, p_full) on the unperturbed input."""
     with torch.no_grad():
-        logits = nn_forward_func(
-            input_embed, position_embed, type_embed, attention_mask
-        )
+        logits     = nn_forward_func(model, input_embed, position_embed, type_embed, attention_mask)
         probs      = F.softmax(logits, dim=-1)
         pred_class = int(probs.argmax(dim=-1).item())
         p_full     = float(probs[0, pred_class].item())
@@ -52,6 +53,7 @@ def _get_predicted_class_and_prob(
 
 def _get_prob_from_embed(
     nn_forward_func: Callable,
+    model,
     perturbed_embed: torch.Tensor,
     position_embed: torch.Tensor,
     type_embed: Optional[torch.Tensor],
@@ -60,15 +62,14 @@ def _get_prob_from_embed(
 ) -> float:
     """Return p(pred_class) given a perturbed token embedding."""
     with torch.no_grad():
-        logits = nn_forward_func(
-            perturbed_embed, position_embed, type_embed, attention_mask
-        )
-        probs = F.softmax(logits, dim=-1)
+        logits = nn_forward_func(model, perturbed_embed, position_embed, type_embed, attention_mask)
+        probs  = F.softmax(logits, dim=-1)
         return float(probs[0, pred_class].item())
 
 
 def _baseline_prob(
     nn_forward_func: Callable,
+    model,
     input_embed: torch.Tensor,
     position_embed: torch.Tensor,
     type_embed: Optional[torch.Tensor],
@@ -87,7 +88,7 @@ def _baseline_prob(
         zero_embed = torch.zeros_like(input_embed)
 
     return _get_prob_from_embed(
-        nn_forward_func,
+        nn_forward_func, model,
         zero_embed, position_embed, type_embed, attention_mask,
         pred_class,
     )
@@ -107,9 +108,9 @@ def soft_input_perturbation(
     Parameters
     ----------
     token_embeddings : Tensor, shape (1, seq_len, hidden_dim)
-    attr_scores      : Tensor, shape (seq_len,)  — raw attribution scores
-    mode             : "sufficiency"      -> q = a_i  (retain ∝ importance)
-                       "comprehensiveness"-> q = 1-a_i (remove ∝ importance)
+    attr_scores      : Tensor, shape (seq_len,) — raw attribution scores
+    mode             : "sufficiency"       -> q = a_i  (retain ∝ importance)
+                       "comprehensiveness" -> q = 1-a_i (remove ∝ importance)
 
     Returns
     -------
@@ -117,12 +118,11 @@ def soft_input_perturbation(
     """
     assert mode in ("sufficiency", "comprehensiveness")
 
-    scores = _normalize_scores(attr_scores.float())   # (seq_len,) in [0,1]
-
-    q = scores if mode == "sufficiency" else 1.0 - scores
+    scores = _normalize_scores(attr_scores.float())   # (seq_len,) in [0, 1]
+    q      = scores if mode == "sufficiency" else 1.0 - scores
 
     device = token_embeddings.device
-    # Bernoulli mask: (seq_len,) -> (1, seq_len, 1) to broadcast over hidden
+    # Bernoulli mask: (seq_len,) -> (1, seq_len, 1) to broadcast over hidden dim
     mask = torch.bernoulli(q.to(device))              # (seq_len,)
     mask = mask.unsqueeze(0).unsqueeze(-1)            # (1, seq_len, 1)
 
@@ -135,7 +135,7 @@ def soft_input_perturbation(
 
 def calculate_soft_sufficiency(
     nn_forward_func: Callable,
-    model,                          # kept for API symmetry with xai_metrics; unused
+    model,
     input_embed: torch.Tensor,
     position_embed: torch.Tensor,
     type_embed: Optional[torch.Tensor],
@@ -148,17 +148,16 @@ def calculate_soft_sufficiency(
 
         Soft-S  = 1 - max(0, p(ŷ|X) - p(ŷ|X'))
         Soft-NS = (Soft-S - S(X,ŷ,0)) / (1 - S(X,ŷ,0))
-
-    `model` argument is accepted but not used (nn_forward_func already
-    closes over the model in the PACE setup).
     """
     pred_class, p_full = _get_predicted_class_and_prob(
-        nn_forward_func, input_embed, position_embed, type_embed, attention_mask
+        nn_forward_func, model,
+        input_embed, position_embed, type_embed, attention_mask,
     )
 
     p_base = _baseline_prob(
-        nn_forward_func, input_embed, position_embed, type_embed,
-        attention_mask, base_token_emb, pred_class,
+        nn_forward_func, model,
+        input_embed, position_embed, type_embed, attention_mask,
+        base_token_emb, pred_class,
     )
     s_base = 1.0 - max(0.0, p_full - p_base)
     denom  = 1.0 - s_base
@@ -169,7 +168,7 @@ def calculate_soft_sufficiency(
     for _ in range(n_samples):
         x_prime = soft_input_perturbation(input_embed, attr_full, mode="sufficiency")
         p_prime = _get_prob_from_embed(
-            nn_forward_func,
+            nn_forward_func, model,
             x_prime, position_embed, type_embed, attention_mask,
             pred_class,
         )
@@ -200,12 +199,14 @@ def calculate_soft_comprehensiveness(
         Soft-NC = Soft-C / (1 - S(X,ŷ,0))
     """
     pred_class, p_full = _get_predicted_class_and_prob(
-        nn_forward_func, input_embed, position_embed, type_embed, attention_mask
+        nn_forward_func, model,
+        input_embed, position_embed, type_embed, attention_mask,
     )
 
     p_base = _baseline_prob(
-        nn_forward_func, input_embed, position_embed, type_embed,
-        attention_mask, base_token_emb, pred_class,
+        nn_forward_func, model,
+        input_embed, position_embed, type_embed, attention_mask,
+        base_token_emb, pred_class,
     )
     s_base = 1.0 - max(0.0, p_full - p_base)
     denom  = 1.0 - s_base
@@ -216,7 +217,7 @@ def calculate_soft_comprehensiveness(
     for _ in range(n_samples):
         x_prime = soft_input_perturbation(input_embed, attr_full, mode="comprehensiveness")
         p_prime = _get_prob_from_embed(
-            nn_forward_func,
+            nn_forward_func, model,
             x_prime, position_embed, type_embed, attention_mask,
             pred_class,
         )
@@ -243,7 +244,8 @@ def calculate_soft_log_odds(
 ) -> float:
     """Soft log-odds: mean drop in log-probability after soft erasure."""
     pred_class, p_full = _get_predicted_class_and_prob(
-        nn_forward_func, input_embed, position_embed, type_embed, attention_mask
+        nn_forward_func, model,
+        input_embed, position_embed, type_embed, attention_mask,
     )
 
     eps = 1e-9
@@ -251,7 +253,7 @@ def calculate_soft_log_odds(
     for _ in range(n_samples):
         x_prime = soft_input_perturbation(input_embed, attr_full, mode="comprehensiveness")
         p_prime = _get_prob_from_embed(
-            nn_forward_func,
+            nn_forward_func, model,
             x_prime, position_embed, type_embed, attention_mask,
             pred_class,
         )
