@@ -33,7 +33,6 @@ for script in "${scripts[@]}"; do
                 # Execute the python script
                 python "$script" \
                     --model "$model" \
-                    --baseline "$baseline" \
                     --eval-baseline "$eval_baseline" \
                     --dataset sst2
                 
