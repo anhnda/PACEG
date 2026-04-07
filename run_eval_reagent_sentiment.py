@@ -580,16 +580,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     run_benchmark(args)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model",   choices=["distilbert", "bert", "roberta"],
-                        default="distilbert")
-    parser.add_argument("--dataset", choices=["sst2", "imdb", "rotten"],
-                        default="sst2")
-    parser.add_argument("--top_k",    type=int, default=3,
-                        help="MLM replacement candidates per token (paper default: 3)")
-    parser.add_argument("--topk_pct", type=int, default=20,
-                        help="Top-%% tokens to ablate for eval metrics")
-    parser.add_argument("--num_samples", type=int, default=1000)
-    args = parser.parse_args()
-    run_benchmark(args)
