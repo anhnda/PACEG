@@ -100,7 +100,7 @@ torch.backends.cuda.enable_math_sdp(True)
 # We import and reuse it so both methods share one loaded classifier instance,
 # saving GPU memory and avoiding a redundant download/reload.
 try:
-    from attcat_eval_sentiment import cache as _attcat_cache
+    from run_eval_attcat_sentiment import cache as _attcat_cache
 except ImportError:
     _attcat_cache = {}   # running standalone — use our own empty dict
 
