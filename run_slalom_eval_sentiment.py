@@ -275,9 +275,9 @@ def run_benchmark(args):
     if args.dataset == "imdb":
         dataset = load_dataset("imdb")["test"]
         data    = list(zip(dataset["text"], dataset["label"]))
-        data    = random.sample(data, min(args.num_samples * 2, len(data)))
+        data    = random.sample(data, min(args.num_samples, len(data)))
     elif args.dataset == "sst2":
-        dataset = load_dataset("glue", "sst2")["validation"]
+        dataset = load_dataset("glue", "sst2")["test"]
         data    = list(zip(dataset["sentence"], dataset["label"]))
     elif args.dataset == "rotten":
         dataset = load_dataset("rotten_tomatoes")["test"]
