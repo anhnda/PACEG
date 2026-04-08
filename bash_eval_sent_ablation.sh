@@ -1,18 +1,24 @@
 #!/bin/bash
 
-# Define the list of methods
+# Define the arrays
+models=("bert" "distilbert" "roberta")
 methods=("l1" "l2" "scalar")
 
-# Loop through each method and execute the python script
-for method_name in "${methods[@]}"; do
-    echo "------------------------------------------------"
-    echo "Running evaluation for method: $method_name"
-    echo "------------------------------------------------"
-    
-    python run_eval_pg_sentiment_ablation.py \
-        --dataset sst2 \
-        --model bert \
-        --method "$method_name"
+# Outer loop for models
+for model_name in "${models[@]}"; do
+    # Inner loop for methods
+    for method_name in "${methods[@]}"; do
+        
+        echo "================================================"
+        echo "MODEL: $model_name | METHOD: $method_name"
+        echo "================================================"
+        
+        python run_eval_pg_sentiment_ablation.py \
+            --dataset sst2 \
+            --model "$model_name" \
+            --method "$method_name"
+            
+    done
 done
 
-echo "All evaluations complete!"
+echo "All combinations of models and methods are complete!"
