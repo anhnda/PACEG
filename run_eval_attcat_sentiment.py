@@ -302,7 +302,7 @@ if __name__ == "__main__":
         data = list(zip(ds["text"], ds["label"]))
         data = random.sample(data, min(args.n_samples, len(data)))
     elif args.dataset == "sst2":
-        ds   = load_dataset("glue", "sst2")["validation"]
+        ds   = load_dataset("glue", "sst2")["test"]
         data = list(zip(ds["sentence"], ds["label"]))
     elif args.dataset == "rotten":
         ds   = load_dataset("rotten_tomatoes")["test"]

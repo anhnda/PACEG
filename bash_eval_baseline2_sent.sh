@@ -2,10 +2,10 @@
 
 # Define the list of unique scripts to run
 scripts=(
-    # "run_eval_attcat_sentiment.py"
-    # "run_eval_ig_sentiment.py"
-    # "run_eval_pg_sentiment.py"
-    # "run_slalom_eval_sentiment.py"
+    "run_eval_attcat_sentiment.py"
+    "run_eval_ig_sentiment.py"
+    "run_eval_pg_sentiment.py"
+    "run_slalom_eval_sentiment.py"
     "run_eval_reagent_sentiment.py"
 )
 
@@ -13,7 +13,7 @@ scripts=(
 models=("bert" "roberta" "distilbert")
 
 # Define the list of possible methods for evaluation
-methods=("mask" "pad" "zero" "mean")
+methods=("mask")
 
 # 1. Iterate through each script
 for script in "${scripts[@]}"; do
