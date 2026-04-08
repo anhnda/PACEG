@@ -120,7 +120,7 @@ if __name__ == "__main__":
         )
 
         # FIX 2: use res["attributions"] (filtered) instead of res["attr_full"]
-        attr = res["attributions"].to(res["input_embed"].device)
+        attr = res["attr_full"].to(res["input_embed"].device)
 
         log_odd, _ = calculate_log_odds(
             res["nn_forward_func"], res["model"],
