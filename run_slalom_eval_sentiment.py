@@ -5,16 +5,20 @@ Benchmark SLALOM explanations with the same interface and metrics
 as the PACE gradient evaluation scripts (log-odds, comprehensiveness,
 sufficiency).
 
+Metrics are computed via xai_metrics to guarantee identical formulas:
+  - deletion-based comprehensiveness (topk tokens removed, sequence shortened)
+  - deletion-based sufficiency (only topk tokens kept, sequence shortened)
+  - topk denominator = full sequence length L  (matches xai_metrics)
+
 Usage:
-    python slalom_eval.py --model distilbert --dataset sst2
-    python slalom_eval.py --model bert --dataset imdb --num_samples 500
-    python slalom_eval.py --model distilbert --dataset sst2 --attr_mode value
+    python evaluate_slalom.py --model distilbert --dataset sst2
+    python evaluate_slalom.py --model bert --dataset imdb --num_samples 500
+    python evaluate_slalom.py --model distilbert --dataset sst2 --attr_mode value
 """
 
 import time
 import random
 import argparse
-import inspect
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -22,6 +26,8 @@ from tqdm import tqdm
 from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from slalom_explanations import SLALOMLocalExplanantions
+from xai_metrics import calculate_log_odds, calculate_comprehensiveness, calculate_sufficiency
+from pace_gradients import get_baseline_embedding
 
 random.seed(42)
 np.random.seed(42)
@@ -40,27 +46,24 @@ MODEL_NAMES = {
 }
 
 
-# ── Output structure detection (run once, cached) ─────────────────────────
-_SLALOM_FORMAT = None   # detected lazily on first call
+# ── SLALOM output format detection (run once, cached) ─────────────────────
+_SLALOM_FORMAT = None
 
 def _detect_and_unpack(res):
     """
     Auto-detect SLALOM output format and return (tokens, values, imps).
-    Runs detection once, then uses cached format for all subsequent calls.
 
     Observed formats across SLALOM versions:
-      A) dict  with keys "tokens","value","imp"         → dict, arrays shape (L,) or (L,C)
-      B) list  of (token_str, value_vec, imp_vec)       → 3-tuple per token
-      C) list  of (token_str, score_vec)                → 2-tuple, score_vec shape (2,C) modes stacked
-      D) list  of (token_str, score_scalar)             → 2-tuple, scalar (single mode)
+      A) dict  with keys "tokens","value","imp"
+      B) list  of (token_str, value_vec, imp_vec)        3-tuple per token
+      C) list  of (token_str, stacked_array)             shape (num_modes, num_labels)
+      D) list  of (token_str, score_vec)                 single mode
     """
     global _SLALOM_FORMAT
 
     if _SLALOM_FORMAT is None:
-        # ── Detect format ──
         if isinstance(res, dict):
             _SLALOM_FORMAT = "dict"
-            print(f"[SLALOM format detected] dict, keys={list(res.keys())}")
         elif isinstance(res, (list, tuple)) and len(res) > 0:
             elem = res[0]
             if isinstance(elem, (list, tuple)):
@@ -68,53 +71,39 @@ def _detect_and_unpack(res):
                 if n >= 3:
                     _SLALOM_FORMAT = "list_3tuple"
                 elif n == 2:
-                    # discriminate: is elem[1] a 2D array (modes stacked) or 1D?
                     v = np.array(elem[1])
-                    if v.ndim == 2:
-                        _SLALOM_FORMAT = "list_2tuple_stacked"
-                    else:
-                        _SLALOM_FORMAT = "list_2tuple_single"
+                    _SLALOM_FORMAT = "list_2tuple_stacked" if v.ndim == 2 else "list_2tuple_single"
                 else:
                     raise ValueError(f"Unexpected tuple length {n}: {elem}")
             else:
                 raise ValueError(f"Unexpected element type {type(elem)}: {elem}")
         else:
             raise ValueError(f"Unexpected SLALOM output type {type(res)}: {res}")
-        print(f"[SLALOM format] {_SLALOM_FORMAT}")
+        print(f"[SLALOM format detected] {_SLALOM_FORMAT}")
 
-    # ── Unpack according to detected format ──
     def _to_1d(x):
-        """(L,) or (L,C) → (L,) by taking class1-class0 for binary, or [0] for scalar."""
         x = np.array(x, dtype=np.float32)
         if x.ndim == 1:
             return x
         elif x.shape[-1] == 1:
             return x[..., 0]
         else:
-            return x[..., 1] - x[..., 0]   # signed: positive = favors class 1
+            return x[..., 1] - x[..., 0]
 
     if _SLALOM_FORMAT == "dict":
         tokens = res["tokens"]
         values = _to_1d(np.array(res["value"], dtype=np.float32))
         imps   = _to_1d(np.array(res["imp"],   dtype=np.float32))
-
     elif _SLALOM_FORMAT == "list_3tuple":
-        # (token, value_vec, imp_vec) per token
         tokens = [r[0] for r in res]
         values = _to_1d(np.stack([np.array(r[1], dtype=np.float32) for r in res]))
         imps   = _to_1d(np.stack([np.array(r[2], dtype=np.float32) for r in res]))
-
     elif _SLALOM_FORMAT == "list_2tuple_stacked":
-        # (token, stacked_array) where stacked_array shape (num_modes, num_labels)
-        # row 0 = value, row 1 = imp
-        tokens = [r[0] for r in res]
+        tokens  = [r[0] for r in res]
         stacked = np.stack([np.array(r[1], dtype=np.float32) for r in res])
-        # stacked shape: (L, num_modes, num_labels)
-        values = _to_1d(stacked[:, 0, :])
-        imps   = _to_1d(stacked[:, 1, :]) if stacked.shape[1] > 1 else np.zeros(len(tokens), dtype=np.float32)
-
+        values  = _to_1d(stacked[:, 0, :])
+        imps    = _to_1d(stacked[:, 1, :]) if stacked.shape[1] > 1 else np.zeros(len(tokens), dtype=np.float32)
     elif _SLALOM_FORMAT == "list_2tuple_single":
-        # (token, score_vec) — only one mode returned
         tokens = [r[0] for r in res]
         values = _to_1d(np.stack([np.array(r[1], dtype=np.float32) for r in res]))
         imps   = np.zeros(len(tokens), dtype=np.float32)
@@ -122,107 +111,86 @@ def _detect_and_unpack(res):
     return tokens, values, imps
 
 
-# ── Metrics ────────────────────────────────────────────────────────────────
-def _get_base_emb(model, tokenizer, device):
-    mask_id = tokenizer.mask_token_id or tokenizer.pad_token_id
+# ── Forward wrapper matching xai_metrics signature ────────────────────────
+def _nn_forward_func(model, input_embed, attention_mask,
+                     position_embed=None, type_embed=None,
+                     return_all_logits=False):
+    """
+    Thin wrapper so calculate_* from xai_metrics can drive the SLALOM model.
+    SLALOM models are plain AutoModelForSequenceClassification, so we call
+    inputs_embeds directly.  position_embed / type_embed are unused here
+    (DistilBERT has neither; BERT/RoBERTa use internal positional encodings
+    when inputs_embeds is given).
+    """
     with torch.no_grad():
-        return model.get_input_embeddings()(
-            torch.tensor([[mask_id]], device=device)
-        ).squeeze(0)
+        out = model(inputs_embeds=input_embed, attention_mask=attention_mask)
+    return out.logits
 
-
-def _forward_prob(model, embed_input, attention_mask, pred_id, extra_kwargs):
-    with torch.no_grad():
-        logits = model(
-            inputs_embeds=embed_input,
-            attention_mask=attention_mask,
-            **extra_kwargs
-        ).logits[0]
-    return F.softmax(logits, dim=-1)[pred_id]
-
-def compute_metrics(model, tokenizer, device, input_ids, attention_mask,
-                    extra_kwargs, attr, base_emb, topk=20):
-    embed = model.get_input_embeddings()
-    with torch.no_grad():
-        X       = embed(input_ids)
-        logits0 = model(inputs_embeds=X, attention_mask=attention_mask,
-                        **extra_kwargs).logits[0]
-    pred_id   = int(logits0.argmax().item())
-    prob_orig = F.softmax(logits0, dim=-1)[pred_id]
-    L         = X.shape[1]
-
-    special_ids = set(tokenizer.all_special_ids)
-    fixed = torch.tensor(
-        [tid in special_ids for tid in input_ids[0].tolist()],
-        device=device, dtype=torch.bool
-    )
-
-    attr_rank        = attr.clone().to(device).float()
-    attr_rank[fixed] = -float('inf')
-    k                = max(1, int((~fixed).sum().item() * topk / 100))
-    topk_idx         = torch.topk(attr_rank, k, sorted=False).indices
-
-    # log-odds
-    X_lo              = X.clone()
-    X_lo[0, topk_idx] = base_emb
-    prob_lo           = _forward_prob(model, X_lo, attention_mask, pred_id, extra_kwargs)
-    log_odd           = (torch.log(prob_lo + 1e-10) - torch.log(prob_orig + 1e-10)).item()
-
-    # comprehensiveness
-    X_comp              = X.clone()
-    X_comp[0, topk_idx] = base_emb
-    prob_comp           = _forward_prob(model, X_comp, attention_mask, pred_id, extra_kwargs)
-    comp                = (prob_orig - prob_comp).item()
-
-    # sufficiency
-    keep            = torch.zeros(L, dtype=torch.bool, device=device)
-    keep[topk_idx]  = True
-    keep[fixed]     = True
-    X_suff          = X.clone()
-    X_suff[0, ~keep] = base_emb
-    prob_suff       = _forward_prob(model, X_suff, attention_mask, pred_id, extra_kwargs)
-    suff            = (prob_orig - prob_suff).item()
-
-    return log_odd, comp, suff, pred_id
 
 # ── Single-sample wrapper ──────────────────────────────────────────────────
 def slalom_explain_and_eval(
     text, slalom_explainer, model, tokenizer,
-    device, extra_kwargs, base_emb, topk=20, attr_mode="lin",
+    device, base_token_emb, topk=20, attr_mode="lin",
 ):
+    # ── Run SLALOM ──
     t0  = time.perf_counter()
     raw = slalom_explainer.tokenize_and_explain(text)
     t1  = time.perf_counter()
 
     tokens_out, values, imps = _detect_and_unpack(raw)
 
+    # ── Build attribution vector ──
     if attr_mode == "value":
-        attr = torch.tensor(values)
+        attr_np = values
     elif attr_mode == "imp":
-        attr = torch.tensor(imps)
-    else:
-        attr = torch.tensor(values * np.exp(np.clip(imps, -20, 20)))
+        attr_np = imps
+    else:  # "lin"
+        attr_np = values * np.exp(np.clip(imps, -20, 20))
 
-    enc            = tokenizer(text, return_tensors="pt", truncation=True,
-                               return_special_tokens_mask=True)
-    enc            = {k: v.to(device) for k, v in enc.items()}
+    # ── Tokenise to get embeddings, matching length expected by xai_metrics ──
+    enc = tokenizer(text, return_tensors="pt", truncation=True,
+                    return_special_tokens_mask=True)
+    enc = {k: v.to(device) for k, v in enc.items()}
     input_ids      = enc["input_ids"]
     attention_mask = enc["attention_mask"]
     L              = input_ids.shape[1]
 
-    if attr.shape[0] != L:
-        special_ids_set = set(tokenizer.all_special_ids)
-        keep_idx        = [i for i, tid in enumerate(input_ids[0].tolist())
-                           if tid not in special_ids_set]
-        full_attr       = torch.zeros(L, dtype=torch.float32)
-        if len(keep_idx) == attr.shape[0]:
-            full_attr[keep_idx] = attr.float()
-        attr = full_attr
+    embed = model.get_input_embeddings()
+    with torch.no_grad():
+        input_embed = embed(input_ids)          # (1, L, d)
 
-    log_odd, comp, suff, pred_id = compute_metrics(
-        model, tokenizer, device,
-        input_ids, attention_mask, extra_kwargs,
-        attr, base_emb, topk=topk,
+    # ── Align attribution vector to full length L ──
+    attr = torch.zeros(L, dtype=torch.float32, device=device)
+    if attr_np.shape[0] == L:
+        attr = torch.tensor(attr_np, dtype=torch.float32, device=device)
+    else:
+        # SLALOM may strip special tokens; remap by position
+        special_ids_set = set(tokenizer.all_special_ids)
+        keep_idx = [i for i, tid in enumerate(input_ids[0].tolist())
+                    if tid not in special_ids_set]
+        if len(keep_idx) == attr_np.shape[0]:
+            attr[keep_idx] = torch.tensor(attr_np, dtype=torch.float32, device=device)
+        # else: leave zeros (rare edge case, logged below)
+
+    # ── Compute metrics via xai_metrics (identical to PACE eval) ──
+    # position_embed and type_embed are None; _nn_forward_func ignores them.
+    log_odd, pred_id = calculate_log_odds(
+        _nn_forward_func, model,
+        input_embed, None, None,
+        attention_mask, base_token_emb,
+        attr, topk=topk,
+    )
+    comp = calculate_comprehensiveness(
+        _nn_forward_func, model,
+        input_embed, None, None,
+        attention_mask, base_token_emb,
+        attr, topk=topk,
+    )
+    suff = calculate_sufficiency(
+        _nn_forward_func, model,
+        input_embed, None, None,
+        attention_mask, base_token_emb,
+        attr, topk=topk,
     )
 
     return {
@@ -249,29 +217,24 @@ def run_benchmark(args):
 
     model_name = MODEL_NAMES[(args.model, args.dataset)]
     tokenizer  = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-    model      = AutoModelForSequenceClassification.from_pretrained(
-        model_name
-    ).to(device)
+    model      = AutoModelForSequenceClassification.from_pretrained(model_name).to(device)
     model.eval()
 
-    fwd_params   = inspect.signature(model.forward).parameters
-    extra_kwargs = {}
-
-    # Build base_emb once from eval_baseline
-    from pace_gradients import get_baseline_embedding
+    # Build base_token_emb — shape (1, d) to match xai_metrics expectation
     embed = model.get_input_embeddings()
     with torch.no_grad():
         dummy_ids = torch.tensor([[tokenizer.cls_token_id or 0]], device=device)
         dummy_X   = embed(dummy_ids)   # (1, 1, d)
 
-    base_emb = get_baseline_embedding(
+    base_token_emb = get_baseline_embedding(
         args.eval_baseline, embed, tokenizer, dummy_X, device
-    )[0, 0, :]   # (d,) — compute_metrics uses base_emb directly as a row vector
+    )[0, 0:1, :]   # (1, d) — matches xai_metrics assignment base_token_emb shape
 
     slalom_explainer = SLALOMLocalExplanantions(
         model, tokenizer, modes=["value", "imp"]
     )
 
+    # ── Dataset loading — mirrors Doc 2 exactly ──
     if args.dataset == "imdb":
         dataset = load_dataset("imdb")["test"]
         data    = list(zip(dataset["text"], dataset["label"]))
@@ -299,8 +262,7 @@ def run_benchmark(args):
                 model=model,
                 tokenizer=tokenizer,
                 device=device,
-                extra_kwargs=extra_kwargs,
-                base_emb=base_emb,
+                base_token_emb=base_token_emb,
                 topk=args.topk,
                 attr_mode=args.attr_mode,
             )
