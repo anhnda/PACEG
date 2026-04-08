@@ -110,14 +110,29 @@ def _normalise(grad_ex: torch.Tensor, mode: str) -> torch.Tensor:
         return grad_ex / denom
 
     elif mode == "safe_norm":
-        # Zero-safe signed sum: replace zero-sum rows with eps so the
-        # division is defined but leaves the row effectively zero-weighted
-        row_sum = grad_ex.sum(dim=1, keepdim=True)          # (steps, 1)
+        row_sum = grad_ex.sum(dim=1, keepdim=True)
         denom   = torch.where(row_sum == 0,
-                              torch.full_like(row_sum, 1e-10),
-                              row_sum)
-        return grad_ex / denom
+                            torch.full_like(row_sum, 1e-10),
+                            row_sum)
+        grad_ex = grad_ex / denom
 
+        # Keep sign, clip magnitude to threshold
+        threshold = 1000.0
+        clipped_mask = grad_ex.abs() >= threshold          # (steps, tokens)
+        grad_ex = torch.where(
+            clipped_mask,
+            grad_ex.sign() * threshold,
+            grad_ex
+        )
+
+        # Re-normalize only for rows that had at least one clipped value
+        rows_clipped = clipped_mask.any(dim=1, keepdim=True)  # (steps, 1)
+        if rows_clipped.any():
+            row_sum2 = grad_ex.sum(dim=1, keepdim=True)
+            denom2   = torch.where(row_sum2 == 0,
+                                torch.full_like(row_sum2, 1e-10),
+                                row_sum2)
+            grad_ex  = torch.where(rows_clipped, grad_ex / denom2, grad_ex)
     elif mode == "square_norm":
         # Squared-gradient normalisation: grad^2 / sum(grad^2)
         # Non-negative outputs that sum to ~1 per step; amplifies large grads
