@@ -2,7 +2,8 @@
 
 # Define the arrays for models and normalization types
 models=("bert" "distilbert" "roberta")
-norms=("sign_norm" "sign_magl2" "sign_magl1" "safe_norm" "square_norm")
+#norms=("sign_norm" "sign_magl2" "sign_magl1" "safe_norm" "square_norm")
+norms=( "safe_norm")
 
 # Start the nested loop
 for model_name in "${models[@]}"; do
