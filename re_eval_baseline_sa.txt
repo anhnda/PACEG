@@ -1,0 +1,2825 @@
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    bert
+EVAL:     mask
+==========================================================
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+Device        : cuda
+Eval baseline : mask
+
+--- AttCAT demo attribution ---
+             this : +0.032621
+               is : +0.056262
+                a : +0.088694
+           really : +0.006545
+              bad : +0.025749
+            movie : -0.047980
+                , : +0.083414
+         although : +0.002447
+               it : -0.005577
+              has : -0.038355
+                a : -0.041448
+        promising : -0.073127
+            start : -0.077755
+                , : +0.024945
+               it : +0.082025
+            ended : +0.037792
+               on : +0.086706
+                a : +0.071404
+             very : +0.020647
+              low : -0.001525
+             note : -0.029728
+                . : -0.105887
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -0.6320  Comp: 0.1864  Suff: 0.3462  Time/sample: 0.0717s
+[  200]  Log-odds: -0.5355  Comp: 0.1800  Suff: 0.3360  Time/sample: 0.0713s
+[  300]  Log-odds: -0.4565  Comp: 0.1685  Suff: 0.3620  Time/sample: 0.0712s
+[  400]  Log-odds: -0.4238  Comp: 0.1647  Suff: 0.3611  Time/sample: 0.0711s
+[  500]  Log-odds: -0.4010  Comp: 0.1620  Suff: 0.3741  Time/sample: 0.0707s
+[  600]  Log-odds: -0.4215  Comp: 0.1652  Suff: 0.3817  Time/sample: 0.0704s
+[  700]  Log-odds: -0.4562  Comp: 0.1690  Suff: 0.3910  Time/sample: 0.0704s
+[  800]  Log-odds: -0.4350  Comp: 0.1635  Suff: 0.3732  Time/sample: 0.0703s
+
+=== Final Results ===
+Log-odds         : -0.4366
+Comprehensiveness: 0.1644
+Sufficiency      : 0.3719
+Time/sample      : 0.0704s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    bert
+EVAL:     pad
+==========================================================
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+Device        : cuda
+Eval baseline : pad
+
+--- AttCAT demo attribution ---
+             this : +0.032621
+               is : +0.056262
+                a : +0.088694
+           really : +0.006545
+              bad : +0.025749
+            movie : -0.047980
+                , : +0.083414
+         although : +0.002447
+               it : -0.005577
+              has : -0.038355
+                a : -0.041448
+        promising : -0.073127
+            start : -0.077755
+                , : +0.024945
+               it : +0.082025
+            ended : +0.037792
+               on : +0.086706
+                a : +0.071404
+             very : +0.020647
+              low : -0.001525
+             note : -0.029728
+                . : -0.105887
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -0.5917  Comp: 0.1864  Suff: 0.3462  Time/sample: 0.0687s
+[  200]  Log-odds: -0.5666  Comp: 0.1800  Suff: 0.3360  Time/sample: 0.0683s
+[  300]  Log-odds: -0.5291  Comp: 0.1685  Suff: 0.3620  Time/sample: 0.0689s
+[  400]  Log-odds: -0.5495  Comp: 0.1647  Suff: 0.3611  Time/sample: 0.0699s
+[  500]  Log-odds: -0.5636  Comp: 0.1620  Suff: 0.3741  Time/sample: 0.0703s
+[  600]  Log-odds: -0.5742  Comp: 0.1652  Suff: 0.3817  Time/sample: 0.0709s
+[  700]  Log-odds: -0.6074  Comp: 0.1690  Suff: 0.3910  Time/sample: 0.0711s
+[  800]  Log-odds: -0.5908  Comp: 0.1635  Suff: 0.3732  Time/sample: 0.0710s
+
+=== Final Results ===
+Log-odds         : -0.6132
+Comprehensiveness: 0.1644
+Sufficiency      : 0.3719
+Time/sample      : 0.0711s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    bert
+EVAL:     zero
+==========================================================
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+Device        : cuda
+Eval baseline : zero
+
+--- AttCAT demo attribution ---
+             this : +0.032621
+               is : +0.056262
+                a : +0.088694
+           really : +0.006545
+              bad : +0.025749
+            movie : -0.047980
+                , : +0.083414
+         although : +0.002447
+               it : -0.005577
+              has : -0.038355
+                a : -0.041448
+        promising : -0.073127
+            start : -0.077755
+                , : +0.024945
+               it : +0.082025
+            ended : +0.037792
+               on : +0.086706
+                a : +0.071404
+             very : +0.020647
+              low : -0.001525
+             note : -0.029728
+                . : -0.105887
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -0.6614  Comp: 0.1864  Suff: 0.3462  Time/sample: 0.0870s
+[  200]  Log-odds: -0.6695  Comp: 0.1800  Suff: 0.3360  Time/sample: 0.0886s
+[  300]  Log-odds: -0.5670  Comp: 0.1685  Suff: 0.3620  Time/sample: 0.0890s
+[  400]  Log-odds: -0.5688  Comp: 0.1647  Suff: 0.3611  Time/sample: 0.0885s
+[  500]  Log-odds: -0.5642  Comp: 0.1620  Suff: 0.3741  Time/sample: 0.0881s
+[  600]  Log-odds: -0.5942  Comp: 0.1652  Suff: 0.3817  Time/sample: 0.0878s
+[  700]  Log-odds: -0.6033  Comp: 0.1690  Suff: 0.3910  Time/sample: 0.0876s
+[  800]  Log-odds: -0.5899  Comp: 0.1635  Suff: 0.3732  Time/sample: 0.0875s
+
+=== Final Results ===
+Log-odds         : -0.6009
+Comprehensiveness: 0.1644
+Sufficiency      : 0.3719
+Time/sample      : 0.0875s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    bert
+EVAL:     mean
+==========================================================
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+Device        : cuda
+Eval baseline : mean
+
+--- AttCAT demo attribution ---
+             this : +0.032621
+               is : +0.056262
+                a : +0.088694
+           really : +0.006545
+              bad : +0.025749
+            movie : -0.047980
+                , : +0.083414
+         although : +0.002447
+               it : -0.005577
+              has : -0.038355
+                a : -0.041448
+        promising : -0.073127
+            start : -0.077755
+                , : +0.024945
+               it : +0.082025
+            ended : +0.037792
+               on : +0.086706
+                a : +0.071404
+             very : +0.020647
+              low : -0.001525
+             note : -0.029728
+                . : -0.105887
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -0.5513  Comp: 0.1864  Suff: 0.3462  Time/sample: 0.0800s
+[  200]  Log-odds: -0.5800  Comp: 0.1800  Suff: 0.3360  Time/sample: 0.0752s
+[  300]  Log-odds: -0.4930  Comp: 0.1685  Suff: 0.3620  Time/sample: 0.0729s
+[  400]  Log-odds: -0.5045  Comp: 0.1647  Suff: 0.3611  Time/sample: 0.0720s
+[  500]  Log-odds: -0.5084  Comp: 0.1620  Suff: 0.3741  Time/sample: 0.0716s
+[  600]  Log-odds: -0.5194  Comp: 0.1652  Suff: 0.3817  Time/sample: 0.0714s
+[  700]  Log-odds: -0.5443  Comp: 0.1690  Suff: 0.3910  Time/sample: 0.0712s
+[  800]  Log-odds: -0.5378  Comp: 0.1635  Suff: 0.3732  Time/sample: 0.0710s
+
+=== Final Results ===
+Log-odds         : -0.5612
+Comprehensiveness: 0.1644
+Sufficiency      : 0.3719
+Time/sample      : 0.0710s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    roberta
+EVAL:     mask
+==========================================================
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+Device        : cuda
+Eval baseline : mask
+
+--- AttCAT demo attribution ---
+             This : +0.235736
+              Ġis : +0.303532
+               Ġa : +0.383411
+          Ġreally : +0.321041
+             Ġbad : +0.124505
+           Ġmovie : +0.207049
+                , : +0.226412
+        Ġalthough : -0.258495
+              Ġit : +0.186674
+             Ġhas : -0.275488
+               Ġa : -0.047079
+       Ġpromising : -0.520710
+           Ġstart : -0.456261
+                , : +0.140226
+              Ġit : +0.194610
+           Ġended : +0.052872
+              Ġon : +0.207255
+               Ġa : +0.301300
+            Ġvery : +0.157470
+             Ġlow : +0.131705
+            Ġnote : +0.098763
+                . : -0.315633
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -0.4457  Comp: 0.1362  Suff: 0.3564  Time/sample: 0.0768s
+[  200]  Log-odds: -0.4605  Comp: 0.1547  Suff: 0.3614  Time/sample: 0.0765s
+[  300]  Log-odds: -0.4585  Comp: 0.1583  Suff: 0.3603  Time/sample: 0.0764s
+[  400]  Log-odds: -0.4172  Comp: 0.1475  Suff: 0.3654  Time/sample: 0.0756s
+[  500]  Log-odds: -0.4110  Comp: 0.1500  Suff: 0.3392  Time/sample: 0.0748s
+[  600]  Log-odds: -0.4123  Comp: 0.1530  Suff: 0.3465  Time/sample: 0.0740s
+[  700]  Log-odds: -0.4165  Comp: 0.1486  Suff: 0.3477  Time/sample: 0.0736s
+[  800]  Log-odds: -0.4269  Comp: 0.1465  Suff: 0.3470  Time/sample: 0.0732s
+
+=== Final Results ===
+Log-odds         : -0.4126
+Comprehensiveness: 0.1456
+Sufficiency      : 0.3457
+Time/sample      : 0.0731s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    roberta
+EVAL:     pad
+==========================================================
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+Device        : cuda
+Eval baseline : pad
+
+--- AttCAT demo attribution ---
+             This : +0.235736
+              Ġis : +0.303532
+               Ġa : +0.383411
+          Ġreally : +0.321041
+             Ġbad : +0.124505
+           Ġmovie : +0.207049
+                , : +0.226412
+        Ġalthough : -0.258495
+              Ġit : +0.186674
+             Ġhas : -0.275488
+               Ġa : -0.047079
+       Ġpromising : -0.520710
+           Ġstart : -0.456261
+                , : +0.140226
+              Ġit : +0.194610
+           Ġended : +0.052872
+              Ġon : +0.207255
+               Ġa : +0.301300
+            Ġvery : +0.157470
+             Ġlow : +0.131705
+            Ġnote : +0.098763
+                . : -0.315633
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -0.4043  Comp: 0.1362  Suff: 0.3564  Time/sample: 0.0712s
+[  200]  Log-odds: -0.5058  Comp: 0.1547  Suff: 0.3614  Time/sample: 0.0710s
+[  300]  Log-odds: -0.4784  Comp: 0.1583  Suff: 0.3603  Time/sample: 0.0708s
+[  400]  Log-odds: -0.4623  Comp: 0.1475  Suff: 0.3654  Time/sample: 0.0707s
+[  500]  Log-odds: -0.4553  Comp: 0.1500  Suff: 0.3392  Time/sample: 0.0705s
+[  600]  Log-odds: -0.4599  Comp: 0.1530  Suff: 0.3465  Time/sample: 0.0705s
+[  700]  Log-odds: -0.4704  Comp: 0.1486  Suff: 0.3477  Time/sample: 0.0704s
+[  800]  Log-odds: -0.4689  Comp: 0.1465  Suff: 0.3470  Time/sample: 0.0704s
+
+=== Final Results ===
+Log-odds         : -0.4533
+Comprehensiveness: 0.1456
+Sufficiency      : 0.3457
+Time/sample      : 0.0704s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    roberta
+EVAL:     zero
+==========================================================
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+Device        : cuda
+Eval baseline : zero
+
+--- AttCAT demo attribution ---
+             This : +0.235736
+              Ġis : +0.303532
+               Ġa : +0.383411
+          Ġreally : +0.321041
+             Ġbad : +0.124505
+           Ġmovie : +0.207049
+                , : +0.226412
+        Ġalthough : -0.258495
+              Ġit : +0.186674
+             Ġhas : -0.275488
+               Ġa : -0.047079
+       Ġpromising : -0.520710
+           Ġstart : -0.456261
+                , : +0.140226
+              Ġit : +0.194610
+           Ġended : +0.052872
+              Ġon : +0.207255
+               Ġa : +0.301300
+            Ġvery : +0.157470
+             Ġlow : +0.131705
+            Ġnote : +0.098763
+                . : -0.315633
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -0.4443  Comp: 0.1362  Suff: 0.3564  Time/sample: 0.0899s
+[  200]  Log-odds: -0.5479  Comp: 0.1547  Suff: 0.3614  Time/sample: 0.0881s
+[  300]  Log-odds: -0.5121  Comp: 0.1583  Suff: 0.3603  Time/sample: 0.0877s
+[  400]  Log-odds: -0.4793  Comp: 0.1475  Suff: 0.3654  Time/sample: 0.0875s
+[  500]  Log-odds: -0.4724  Comp: 0.1500  Suff: 0.3392  Time/sample: 0.0874s
+[  600]  Log-odds: -0.4806  Comp: 0.1530  Suff: 0.3465  Time/sample: 0.0875s
+[  700]  Log-odds: -0.4809  Comp: 0.1486  Suff: 0.3477  Time/sample: 0.0875s
+[  800]  Log-odds: -0.4861  Comp: 0.1465  Suff: 0.3470  Time/sample: 0.0867s
+
+=== Final Results ===
+Log-odds         : -0.4710
+Comprehensiveness: 0.1456
+Sufficiency      : 0.3457
+Time/sample      : 0.0868s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    roberta
+EVAL:     mean
+==========================================================
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+Device        : cuda
+Eval baseline : mean
+
+--- AttCAT demo attribution ---
+             This : +0.235736
+              Ġis : +0.303532
+               Ġa : +0.383411
+          Ġreally : +0.321041
+             Ġbad : +0.124505
+           Ġmovie : +0.207049
+                , : +0.226412
+        Ġalthough : -0.258495
+              Ġit : +0.186674
+             Ġhas : -0.275488
+               Ġa : -0.047079
+       Ġpromising : -0.520710
+           Ġstart : -0.456261
+                , : +0.140226
+              Ġit : +0.194610
+           Ġended : +0.052872
+              Ġon : +0.207255
+               Ġa : +0.301300
+            Ġvery : +0.157470
+             Ġlow : +0.131705
+            Ġnote : +0.098763
+                . : -0.315633
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -0.4015  Comp: 0.1362  Suff: 0.3564  Time/sample: 0.0749s
+[  200]  Log-odds: -0.5066  Comp: 0.1547  Suff: 0.3614  Time/sample: 0.0725s
+[  300]  Log-odds: -0.4808  Comp: 0.1583  Suff: 0.3603  Time/sample: 0.0717s
+[  400]  Log-odds: -0.4606  Comp: 0.1475  Suff: 0.3654  Time/sample: 0.0752s
+[  500]  Log-odds: -0.4506  Comp: 0.1500  Suff: 0.3392  Time/sample: 0.0775s
+[  600]  Log-odds: -0.4557  Comp: 0.1530  Suff: 0.3465  Time/sample: 0.0792s
+[  700]  Log-odds: -0.4626  Comp: 0.1486  Suff: 0.3477  Time/sample: 0.0802s
+[  800]  Log-odds: -0.4662  Comp: 0.1465  Suff: 0.3470  Time/sample: 0.0810s
+
+=== Final Results ===
+Log-odds         : -0.4523
+Comprehensiveness: 0.1456
+Sufficiency      : 0.3457
+Time/sample      : 0.0816s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    distilbert
+EVAL:     mask
+==========================================================
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+Device        : cuda
+Eval baseline : mask
+
+--- AttCAT demo attribution ---
+             this : +0.261914
+               is : +0.284067
+                a : +0.304757
+           really : +0.246857
+              bad : +0.177431
+            movie : +0.268706
+                , : +0.156070
+         although : +0.139547
+               it : +0.174079
+              has : +0.041595
+                a : +0.031382
+        promising : +0.022807
+            start : +0.037173
+                , : -0.000804
+               it : +0.222265
+            ended : +0.233696
+               on : +0.233963
+                a : +0.252220
+             very : +0.242478
+              low : +0.170856
+             note : +0.287166
+                . : -0.024630
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -0.4323  Comp: 0.0919  Suff: 0.3060  Time/sample: 0.0315s
+[  200]  Log-odds: -0.6721  Comp: 0.1820  Suff: 0.2991  Time/sample: 0.0312s
+[  300]  Log-odds: -0.6326  Comp: 0.1659  Suff: 0.3274  Time/sample: 0.0313s
+[  400]  Log-odds: -0.5930  Comp: 0.1679  Suff: 0.3230  Time/sample: 0.0312s
+[  500]  Log-odds: -0.5656  Comp: 0.1583  Suff: 0.3393  Time/sample: 0.0313s
+[  600]  Log-odds: -0.5771  Comp: 0.1620  Suff: 0.3442  Time/sample: 0.0313s
+[  700]  Log-odds: -0.5793  Comp: 0.1565  Suff: 0.3431  Time/sample: 0.0314s
+[  800]  Log-odds: -0.5656  Comp: 0.1557  Suff: 0.3478  Time/sample: 0.0314s
+
+=== Final Results ===
+Log-odds         : -0.5869
+Comprehensiveness: 0.1562
+Sufficiency      : 0.3433
+Time/sample      : 0.0316s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    distilbert
+EVAL:     pad
+==========================================================
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+Device        : cuda
+Eval baseline : pad
+
+--- AttCAT demo attribution ---
+             this : +0.261914
+               is : +0.284067
+                a : +0.304757
+           really : +0.246857
+              bad : +0.177431
+            movie : +0.268706
+                , : +0.156070
+         although : +0.139547
+               it : +0.174079
+              has : +0.041595
+                a : +0.031382
+        promising : +0.022807
+            start : +0.037173
+                , : -0.000804
+               it : +0.222265
+            ended : +0.233696
+               on : +0.233963
+                a : +0.252220
+             very : +0.242478
+              low : +0.170856
+             note : +0.287166
+                . : -0.024630
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -0.5107  Comp: 0.0919  Suff: 0.3060  Time/sample: 0.0320s
+[  200]  Log-odds: -0.7546  Comp: 0.1820  Suff: 0.2991  Time/sample: 0.0322s
+[  300]  Log-odds: -0.6771  Comp: 0.1659  Suff: 0.3274  Time/sample: 0.0322s
+[  400]  Log-odds: -0.6490  Comp: 0.1679  Suff: 0.3230  Time/sample: 0.0320s
+[  500]  Log-odds: -0.6163  Comp: 0.1583  Suff: 0.3393  Time/sample: 0.0317s
+[  600]  Log-odds: -0.6145  Comp: 0.1620  Suff: 0.3442  Time/sample: 0.0316s
+[  700]  Log-odds: -0.6085  Comp: 0.1565  Suff: 0.3431  Time/sample: 0.0316s
+[  800]  Log-odds: -0.5980  Comp: 0.1557  Suff: 0.3478  Time/sample: 0.0315s
+
+=== Final Results ===
+Log-odds         : -0.6150
+Comprehensiveness: 0.1562
+Sufficiency      : 0.3433
+Time/sample      : 0.0315s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    distilbert
+EVAL:     zero
+==========================================================
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+Device        : cuda
+Eval baseline : zero
+
+--- AttCAT demo attribution ---
+             this : +0.261914
+               is : +0.284067
+                a : +0.304757
+           really : +0.246857
+              bad : +0.177431
+            movie : +0.268706
+                , : +0.156070
+         although : +0.139547
+               it : +0.174079
+              has : +0.041595
+                a : +0.031382
+        promising : +0.022807
+            start : +0.037173
+                , : -0.000804
+               it : +0.222265
+            ended : +0.233696
+               on : +0.233963
+                a : +0.252220
+             very : +0.242478
+              low : +0.170856
+             note : +0.287166
+                . : -0.024630
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -0.7701  Comp: 0.0919  Suff: 0.3060  Time/sample: 0.0319s
+[  200]  Log-odds: -0.9100  Comp: 0.1820  Suff: 0.2991  Time/sample: 0.0311s
+[  300]  Log-odds: -0.8398  Comp: 0.1659  Suff: 0.3274  Time/sample: 0.0310s
+[  400]  Log-odds: -0.8166  Comp: 0.1679  Suff: 0.3230  Time/sample: 0.0311s
+[  500]  Log-odds: -0.8280  Comp: 0.1583  Suff: 0.3393  Time/sample: 0.0312s
+[  600]  Log-odds: -0.8113  Comp: 0.1620  Suff: 0.3442  Time/sample: 0.0312s
+[  700]  Log-odds: -0.8251  Comp: 0.1565  Suff: 0.3431  Time/sample: 0.0313s
+[  800]  Log-odds: -0.8329  Comp: 0.1557  Suff: 0.3478  Time/sample: 0.0315s
+
+=== Final Results ===
+Log-odds         : -0.8806
+Comprehensiveness: 0.1562
+Sufficiency      : 0.3433
+Time/sample      : 0.0316s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_attcat_sentiment.py
+MODEL:    distilbert
+EVAL:     mean
+==========================================================
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+Device        : cuda
+Eval baseline : mean
+
+--- AttCAT demo attribution ---
+             this : +0.261914
+               is : +0.284067
+                a : +0.304757
+           really : +0.246857
+              bad : +0.177431
+            movie : +0.268706
+                , : +0.156070
+         although : +0.139547
+               it : +0.174079
+              has : +0.041595
+                a : +0.031382
+        promising : +0.022807
+            start : +0.037173
+                , : -0.000804
+               it : +0.222265
+            ended : +0.233696
+               on : +0.233963
+                a : +0.252220
+             very : +0.242478
+              low : +0.170856
+             note : +0.287166
+                . : -0.024630
+
+Loading dataset ...
+Evaluating 872 samples with AttCAT ...
+
+[  100]  Log-odds: -1.0813  Comp: 0.0919  Suff: 0.3060  Time/sample: 0.0321s
+[  200]  Log-odds: -1.2700  Comp: 0.1820  Suff: 0.2991  Time/sample: 0.0315s
+[  300]  Log-odds: -1.2527  Comp: 0.1659  Suff: 0.3274  Time/sample: 0.0316s
+[  400]  Log-odds: -1.2326  Comp: 0.1679  Suff: 0.3230  Time/sample: 0.0315s
+[  500]  Log-odds: -1.2060  Comp: 0.1583  Suff: 0.3393  Time/sample: 0.0315s
+[  600]  Log-odds: -1.1515  Comp: 0.1620  Suff: 0.3442  Time/sample: 0.0314s
+[  700]  Log-odds: -1.1467  Comp: 0.1565  Suff: 0.3431  Time/sample: 0.0312s
+[  800]  Log-odds: -1.1206  Comp: 0.1557  Suff: 0.3478  Time/sample: 0.0312s
+
+=== Final Results ===
+Log-odds         : -1.1589
+Comprehensiveness: 0.1562
+Sufficiency      : 0.3433
+Time/sample      : 0.0312s
+Total samples    : 872
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    bert
+EVAL:     mask
+==========================================================
+Device        : cuda
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : mask
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +1.648969
+          is : +1.667218
+           a : +2.250632
+      really : +2.700373
+         bad : +7.037772
+       movie : +2.891182
+           , : +1.834512
+    although : +2.074213
+          it : +1.779563
+         has : +2.070371
+           a : +2.207862
+   promising : +2.398319
+       start : +2.959968
+           , : +2.645517
+          it : +2.330049
+       ended : +2.407182
+          on : +2.175106
+           a : +2.035897
+        very : +2.123596
+         low : +3.110579
+        note : +2.641915
+           . : +1.766965
+
+Starting IG attribution computation...
+[100]  Log-odds: -0.6531  Comp: 0.2510  Suff: 0.2945  Time: 0.0303s
+[200]  Log-odds: -0.6377  Comp: 0.2406  Suff: 0.2880  Time: 0.0303s
+[300]  Log-odds: -0.6318  Comp: 0.2514  Suff: 0.2873  Time: 0.0307s
+[400]  Log-odds: -0.6172  Comp: 0.2441  Suff: 0.2851  Time: 0.0306s
+[500]  Log-odds: -0.5870  Comp: 0.2448  Suff: 0.2874  Time: 0.0304s
+[600]  Log-odds: -0.5845  Comp: 0.2477  Suff: 0.2699  Time: 0.0304s
+[700]  Log-odds: -0.5982  Comp: 0.2466  Suff: 0.2840  Time: 0.0304s
+[800]  Log-odds: -0.5951  Comp: 0.2441  Suff: 0.2823  Time: 0.0303s
+
+Final [872 samples]  Log-odds: -0.5971  Comp: 0.2439  Suff: 0.2823  Time: 0.0303s
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    bert
+EVAL:     pad
+==========================================================
+Device        : cuda
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : pad
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +1.648969
+          is : +1.667218
+           a : +2.250632
+      really : +2.700373
+         bad : +7.037772
+       movie : +2.891182
+           , : +1.834512
+    although : +2.074213
+          it : +1.779563
+         has : +2.070371
+           a : +2.207862
+   promising : +2.398319
+       start : +2.959968
+           , : +2.645517
+          it : +2.330049
+       ended : +2.407182
+          on : +2.175106
+           a : +2.035897
+        very : +2.123596
+         low : +3.110579
+        note : +2.641915
+           . : +1.766965
+
+Starting IG attribution computation...
+[100]  Log-odds: -0.9888  Comp: 0.2510  Suff: 0.2945  Time: 0.0299s
+[200]  Log-odds: -0.9841  Comp: 0.2406  Suff: 0.2880  Time: 0.0297s
+[300]  Log-odds: -1.0320  Comp: 0.2514  Suff: 0.2873  Time: 0.0298s
+[400]  Log-odds: -1.0222  Comp: 0.2441  Suff: 0.2851  Time: 0.0297s
+[500]  Log-odds: -1.0229  Comp: 0.2448  Suff: 0.2874  Time: 0.0298s
+[600]  Log-odds: -0.9510  Comp: 0.2477  Suff: 0.2699  Time: 0.0298s
+[700]  Log-odds: -0.9472  Comp: 0.2466  Suff: 0.2840  Time: 0.0299s
+[800]  Log-odds: -0.9244  Comp: 0.2441  Suff: 0.2823  Time: 0.0300s
+
+Final [872 samples]  Log-odds: -0.9145  Comp: 0.2439  Suff: 0.2823  Time: 0.0300s
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    bert
+EVAL:     zero
+==========================================================
+Device        : cuda
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : zero
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +1.648969
+          is : +1.667218
+           a : +2.250632
+      really : +2.700373
+         bad : +7.037772
+       movie : +2.891182
+           , : +1.834512
+    although : +2.074213
+          it : +1.779563
+         has : +2.070371
+           a : +2.207862
+   promising : +2.398319
+       start : +2.959968
+           , : +2.645517
+          it : +2.330049
+       ended : +2.407182
+          on : +2.175106
+           a : +2.035897
+        very : +2.123596
+         low : +3.110579
+        note : +2.641915
+           . : +1.766965
+
+Starting IG attribution computation...
+[100]  Log-odds: -0.9229  Comp: 0.2510  Suff: 0.2945  Time: 0.0300s
+[200]  Log-odds: -0.9070  Comp: 0.2406  Suff: 0.2880  Time: 0.0300s
+[300]  Log-odds: -0.9391  Comp: 0.2514  Suff: 0.2873  Time: 0.0299s
+[400]  Log-odds: -0.9379  Comp: 0.2441  Suff: 0.2851  Time: 0.0299s
+[500]  Log-odds: -0.9205  Comp: 0.2448  Suff: 0.2874  Time: 0.0298s
+[600]  Log-odds: -0.9477  Comp: 0.2477  Suff: 0.2699  Time: 0.0298s
+[700]  Log-odds: -0.9327  Comp: 0.2466  Suff: 0.2840  Time: 0.0298s
+[800]  Log-odds: -0.9175  Comp: 0.2441  Suff: 0.2823  Time: 0.0298s
+
+Final [872 samples]  Log-odds: -0.9243  Comp: 0.2439  Suff: 0.2823  Time: 0.0298s
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    bert
+EVAL:     mean
+==========================================================
+Device        : cuda
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : mean
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +1.648969
+          is : +1.667218
+           a : +2.250632
+      really : +2.700373
+         bad : +7.037772
+       movie : +2.891182
+           , : +1.834512
+    although : +2.074213
+          it : +1.779563
+         has : +2.070371
+           a : +2.207862
+   promising : +2.398319
+       start : +2.959968
+           , : +2.645517
+          it : +2.330049
+       ended : +2.407182
+          on : +2.175106
+           a : +2.035897
+        very : +2.123596
+         low : +3.110579
+        note : +2.641915
+           . : +1.766965
+
+Starting IG attribution computation...
+[100]  Log-odds: -0.9276  Comp: 0.2510  Suff: 0.2945  Time: 0.0328s
+[200]  Log-odds: -0.8461  Comp: 0.2406  Suff: 0.2880  Time: 0.0329s
+[300]  Log-odds: -0.9680  Comp: 0.2514  Suff: 0.2873  Time: 0.0323s
+[400]  Log-odds: -0.9422  Comp: 0.2441  Suff: 0.2851  Time: 0.0317s
+[500]  Log-odds: -0.9546  Comp: 0.2448  Suff: 0.2874  Time: 0.0313s
+[600]  Log-odds: -0.9432  Comp: 0.2477  Suff: 0.2699  Time: 0.0310s
+[700]  Log-odds: -0.9360  Comp: 0.2466  Suff: 0.2840  Time: 0.0308s
+[800]  Log-odds: -0.9099  Comp: 0.2441  Suff: 0.2823  Time: 0.0307s
+
+Final [872 samples]  Log-odds: -0.9153  Comp: 0.2439  Suff: 0.2823  Time: 0.0306s
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    roberta
+EVAL:     mask
+==========================================================
+Device        : cuda
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : mask
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        This : +0.306081
+         Ġis : +0.263998
+          Ġa : +0.308370
+     Ġreally : +0.455785
+        Ġbad : +1.257553
+      Ġmovie : +0.373255
+           , : +0.250451
+   Ġalthough : +0.554314
+         Ġit : +0.300054
+        Ġhas : +0.405590
+          Ġa : +0.364674
+  Ġpromising : +0.626743
+      Ġstart : +0.495441
+           , : +0.412661
+         Ġit : +0.371096
+      Ġended : +0.401700
+         Ġon : +0.310055
+          Ġa : +0.310698
+       Ġvery : +0.485735
+        Ġlow : +0.913294
+       Ġnote : +0.476897
+           . : +0.322616
+
+Starting IG attribution computation...
+[100]  Log-odds: -1.0498  Comp: 0.2652  Suff: 0.2859  Time: 0.0301s
+[200]  Log-odds: -1.1328  Comp: 0.2900  Suff: 0.2965  Time: 0.0302s
+[300]  Log-odds: -1.0748  Comp: 0.3001  Suff: 0.2917  Time: 0.0301s
+[400]  Log-odds: -0.9865  Comp: 0.2854  Suff: 0.2879  Time: 0.0301s
+[500]  Log-odds: -0.9741  Comp: 0.2829  Suff: 0.2793  Time: 0.0302s
+[600]  Log-odds: -0.9855  Comp: 0.2868  Suff: 0.2854  Time: 0.0302s
+[700]  Log-odds: -1.0167  Comp: 0.2841  Suff: 0.2887  Time: 0.0306s
+[800]  Log-odds: -0.9610  Comp: 0.2660  Suff: 0.2905  Time: 0.0308s
+
+Final [872 samples]  Log-odds: -0.9608  Comp: 0.2645  Suff: 0.2889  Time: 0.0310s
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    roberta
+EVAL:     pad
+==========================================================
+Device        : cuda
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : pad
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        This : +0.306081
+         Ġis : +0.263998
+          Ġa : +0.308370
+     Ġreally : +0.455785
+        Ġbad : +1.257553
+      Ġmovie : +0.373255
+           , : +0.250451
+   Ġalthough : +0.554314
+         Ġit : +0.300054
+        Ġhas : +0.405590
+          Ġa : +0.364674
+  Ġpromising : +0.626743
+      Ġstart : +0.495441
+           , : +0.412661
+         Ġit : +0.371096
+      Ġended : +0.401700
+         Ġon : +0.310055
+          Ġa : +0.310698
+       Ġvery : +0.485735
+        Ġlow : +0.913294
+       Ġnote : +0.476897
+           . : +0.322616
+
+Starting IG attribution computation...
+[100]  Log-odds: -0.8216  Comp: 0.2652  Suff: 0.2859  Time: 0.0300s
+[200]  Log-odds: -0.9661  Comp: 0.2900  Suff: 0.2965  Time: 0.0299s
+[300]  Log-odds: -0.9529  Comp: 0.3001  Suff: 0.2917  Time: 0.0299s
+[400]  Log-odds: -0.9070  Comp: 0.2854  Suff: 0.2879  Time: 0.0299s
+[500]  Log-odds: -0.8973  Comp: 0.2829  Suff: 0.2793  Time: 0.0299s
+[600]  Log-odds: -0.9140  Comp: 0.2868  Suff: 0.2854  Time: 0.0299s
+[700]  Log-odds: -0.9261  Comp: 0.2841  Suff: 0.2887  Time: 0.0299s
+[800]  Log-odds: -0.8747  Comp: 0.2660  Suff: 0.2905  Time: 0.0299s
+
+Final [872 samples]  Log-odds: -0.8705  Comp: 0.2645  Suff: 0.2889  Time: 0.0299s
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    roberta
+EVAL:     zero
+==========================================================
+Device        : cuda
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : zero
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        This : +0.306081
+         Ġis : +0.263998
+          Ġa : +0.308370
+     Ġreally : +0.455785
+        Ġbad : +1.257553
+      Ġmovie : +0.373255
+           , : +0.250451
+   Ġalthough : +0.554314
+         Ġit : +0.300054
+        Ġhas : +0.405590
+          Ġa : +0.364674
+  Ġpromising : +0.626743
+      Ġstart : +0.495441
+           , : +0.412661
+         Ġit : +0.371096
+      Ġended : +0.401700
+         Ġon : +0.310055
+          Ġa : +0.310698
+       Ġvery : +0.485735
+        Ġlow : +0.913294
+       Ġnote : +0.476897
+           . : +0.322616
+
+Starting IG attribution computation...
+[100]  Log-odds: -0.9559  Comp: 0.2652  Suff: 0.2859  Time: 0.0295s
+[200]  Log-odds: -1.0916  Comp: 0.2900  Suff: 0.2965  Time: 0.0298s
+[300]  Log-odds: -1.0402  Comp: 0.3001  Suff: 0.2917  Time: 0.0298s
+[400]  Log-odds: -0.9921  Comp: 0.2854  Suff: 0.2879  Time: 0.0296s
+[500]  Log-odds: -0.9838  Comp: 0.2829  Suff: 0.2793  Time: 0.0296s
+[600]  Log-odds: -1.0032  Comp: 0.2868  Suff: 0.2854  Time: 0.0296s
+[700]  Log-odds: -1.0119  Comp: 0.2841  Suff: 0.2887  Time: 0.0297s
+[800]  Log-odds: -0.9563  Comp: 0.2660  Suff: 0.2905  Time: 0.0297s
+
+Final [872 samples]  Log-odds: -0.9530  Comp: 0.2645  Suff: 0.2889  Time: 0.0297s
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    roberta
+EVAL:     mean
+==========================================================
+Device        : cuda
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : mean
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        This : +0.306081
+         Ġis : +0.263998
+          Ġa : +0.308370
+     Ġreally : +0.455785
+        Ġbad : +1.257553
+      Ġmovie : +0.373255
+           , : +0.250451
+   Ġalthough : +0.554314
+         Ġit : +0.300054
+        Ġhas : +0.405590
+          Ġa : +0.364674
+  Ġpromising : +0.626743
+      Ġstart : +0.495441
+           , : +0.412661
+         Ġit : +0.371096
+      Ġended : +0.401700
+         Ġon : +0.310055
+          Ġa : +0.310698
+       Ġvery : +0.485735
+        Ġlow : +0.913294
+       Ġnote : +0.476897
+           . : +0.322616
+
+Starting IG attribution computation...
+[100]  Log-odds: -0.8860  Comp: 0.2652  Suff: 0.2859  Time: 0.0299s
+[200]  Log-odds: -1.0068  Comp: 0.2900  Suff: 0.2965  Time: 0.0300s
+[300]  Log-odds: -0.9921  Comp: 0.3001  Suff: 0.2917  Time: 0.0300s
+[400]  Log-odds: -0.9377  Comp: 0.2854  Suff: 0.2879  Time: 0.0299s
+[500]  Log-odds: -0.9250  Comp: 0.2829  Suff: 0.2793  Time: 0.0300s
+[600]  Log-odds: -0.9368  Comp: 0.2868  Suff: 0.2854  Time: 0.0300s
+[700]  Log-odds: -0.9520  Comp: 0.2841  Suff: 0.2887  Time: 0.0300s
+[800]  Log-odds: -0.9011  Comp: 0.2660  Suff: 0.2905  Time: 0.0300s
+
+Final [872 samples]  Log-odds: -0.8950  Comp: 0.2645  Suff: 0.2889  Time: 0.0300s
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    distilbert
+EVAL:     mask
+==========================================================
+Device        : cuda
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : mask
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.779415
+          is : +0.778288
+           a : +0.727054
+      really : +1.620666
+         bad : +3.170236
+       movie : +1.467222
+           , : +0.943053
+    although : +1.160489
+          it : +0.789090
+         has : +0.809031
+           a : +0.680408
+   promising : +1.203807
+       start : +0.974621
+           , : +0.819788
+          it : +0.897444
+       ended : +1.078754
+          on : +0.764805
+           a : +0.769798
+        very : +1.246132
+         low : +2.270543
+        note : +1.670282
+           . : +0.698344
+
+Starting IG attribution computation...
+[100]  Log-odds: -1.1307  Comp: 0.2845  Suff: 0.1478  Time: 0.0219s
+[200]  Log-odds: -1.1323  Comp: 0.2944  Suff: 0.2114  Time: 0.0218s
+[300]  Log-odds: -1.1201  Comp: 0.3114  Suff: 0.2112  Time: 0.0218s
+[400]  Log-odds: -1.0108  Comp: 0.2922  Suff: 0.2136  Time: 0.0219s
+[500]  Log-odds: -0.9869  Comp: 0.2787  Suff: 0.2062  Time: 0.0219s
+[600]  Log-odds: -0.9541  Comp: 0.2731  Suff: 0.2030  Time: 0.0219s
+[700]  Log-odds: -0.9844  Comp: 0.2780  Suff: 0.2146  Time: 0.0219s
+[800]  Log-odds: -0.9482  Comp: 0.2723  Suff: 0.2163  Time: 0.0219s
+
+Final [872 samples]  Log-odds: -0.9618  Comp: 0.2735  Suff: 0.2171  Time: 0.0219s
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    distilbert
+EVAL:     pad
+==========================================================
+Device        : cuda
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : pad
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.779415
+          is : +0.778288
+           a : +0.727054
+      really : +1.620666
+         bad : +3.170236
+       movie : +1.467222
+           , : +0.943053
+    although : +1.160489
+          it : +0.789090
+         has : +0.809031
+           a : +0.680408
+   promising : +1.203807
+       start : +0.974621
+           , : +0.819788
+          it : +0.897444
+       ended : +1.078754
+          on : +0.764805
+           a : +0.769798
+        very : +1.246132
+         low : +2.270543
+        note : +1.670282
+           . : +0.698344
+
+Starting IG attribution computation...
+[100]  Log-odds: -1.1680  Comp: 0.2845  Suff: 0.1478  Time: 0.0180s
+[200]  Log-odds: -1.1420  Comp: 0.2944  Suff: 0.2114  Time: 0.0179s
+[300]  Log-odds: -1.0872  Comp: 0.3114  Suff: 0.2112  Time: 0.0178s
+[400]  Log-odds: -0.9836  Comp: 0.2922  Suff: 0.2136  Time: 0.0178s
+[500]  Log-odds: -0.9702  Comp: 0.2787  Suff: 0.2062  Time: 0.0178s
+[600]  Log-odds: -0.9404  Comp: 0.2731  Suff: 0.2030  Time: 0.0177s
+[700]  Log-odds: -0.9558  Comp: 0.2780  Suff: 0.2146  Time: 0.0177s
+[800]  Log-odds: -0.9182  Comp: 0.2723  Suff: 0.2163  Time: 0.0177s
+
+Final [872 samples]  Log-odds: -0.9300  Comp: 0.2735  Suff: 0.2171  Time: 0.0177s
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    distilbert
+EVAL:     zero
+==========================================================
+Device        : cuda
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : zero
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.779415
+          is : +0.778288
+           a : +0.727054
+      really : +1.620666
+         bad : +3.170236
+       movie : +1.467222
+           , : +0.943053
+    although : +1.160489
+          it : +0.789090
+         has : +0.809031
+           a : +0.680408
+   promising : +1.203807
+       start : +0.974621
+           , : +0.819788
+          it : +0.897444
+       ended : +1.078754
+          on : +0.764805
+           a : +0.769798
+        very : +1.246132
+         low : +2.270543
+        note : +1.670282
+           . : +0.698344
+
+Starting IG attribution computation...
+[100]  Log-odds: -1.2201  Comp: 0.2845  Suff: 0.1478  Time: 0.0179s
+[200]  Log-odds: -1.3599  Comp: 0.2944  Suff: 0.2114  Time: 0.0179s
+[300]  Log-odds: -1.3699  Comp: 0.3114  Suff: 0.2112  Time: 0.0179s
+[400]  Log-odds: -1.2973  Comp: 0.2922  Suff: 0.2136  Time: 0.0179s
+[500]  Log-odds: -1.3062  Comp: 0.2787  Suff: 0.2062  Time: 0.0179s
+[600]  Log-odds: -1.2414  Comp: 0.2731  Suff: 0.2030  Time: 0.0179s
+[700]  Log-odds: -1.2804  Comp: 0.2780  Suff: 0.2146  Time: 0.0179s
+[800]  Log-odds: -1.2366  Comp: 0.2723  Suff: 0.2163  Time: 0.0179s
+
+Final [872 samples]  Log-odds: -1.2683  Comp: 0.2735  Suff: 0.2171  Time: 0.0179s
+
+
+==========================================================
+SCRIPT:   run_eval_ig_sentiment.py
+MODEL:    distilbert
+EVAL:     mean
+==========================================================
+Device        : cuda
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+IG baseline   : mask
+Eval baseline : mean
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.779415
+          is : +0.778288
+           a : +0.727054
+      really : +1.620666
+         bad : +3.170236
+       movie : +1.467222
+           , : +0.943053
+    although : +1.160489
+          it : +0.789090
+         has : +0.809031
+           a : +0.680408
+   promising : +1.203807
+       start : +0.974621
+           , : +0.819788
+          it : +0.897444
+       ended : +1.078754
+          on : +0.764805
+           a : +0.769798
+        very : +1.246132
+         low : +2.270543
+        note : +1.670282
+           . : +0.698344
+
+Starting IG attribution computation...
+[100]  Log-odds: -1.6701  Comp: 0.2845  Suff: 0.1478  Time: 0.0180s
+[200]  Log-odds: -1.7546  Comp: 0.2944  Suff: 0.2114  Time: 0.0179s
+[300]  Log-odds: -1.7008  Comp: 0.3114  Suff: 0.2112  Time: 0.0179s
+[400]  Log-odds: -1.6919  Comp: 0.2922  Suff: 0.2136  Time: 0.0179s
+[500]  Log-odds: -1.7414  Comp: 0.2787  Suff: 0.2062  Time: 0.0179s
+[600]  Log-odds: -1.6580  Comp: 0.2731  Suff: 0.2030  Time: 0.0179s
+[700]  Log-odds: -1.7010  Comp: 0.2780  Suff: 0.2146  Time: 0.0179s
+[800]  Log-odds: -1.6772  Comp: 0.2723  Suff: 0.2163  Time: 0.0179s
+
+Final [872 samples]  Log-odds: -1.6860  Comp: 0.2735  Suff: 0.2171  Time: 0.0179s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    bert
+EVAL:     mask
+==========================================================
+Device        : cuda
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : mask
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.202592
+          is : +0.065898
+           a : -0.588482
+      really : -0.217505
+         bad : +3.922397
+       movie : -0.399459
+           , : -0.096388
+    although : +0.450250
+          it : +0.022462
+         has : -0.211775
+           a : +0.847884
+   promising : -0.261292
+       start : -0.196861
+           , : +1.090903
+          it : +0.432328
+       ended : +0.577652
+          on : -0.341690
+           a : +0.077406
+        very : +0.087459
+         low : +1.380864
+        note : -0.541161
+           . : +0.021053
+
+Starting PACE attribution computation...
+[100]  Log-odds: -1.3493  Comp: 0.3983  Suff: 0.2746  Time: 0.0366s
+[200]  Log-odds: -1.4514  Comp: 0.4367  Suff: 0.2827  Time: 0.0373s
+[300]  Log-odds: -1.4334  Comp: 0.4513  Suff: 0.2993  Time: 0.0377s
+[400]  Log-odds: -1.3684  Comp: 0.4304  Suff: 0.2910  Time: 0.0373s
+[500]  Log-odds: -1.3510  Comp: 0.4334  Suff: 0.2951  Time: 0.0374s
+[600]  Log-odds: -1.3561  Comp: 0.4258  Suff: 0.2967  Time: 0.0373s
+[700]  Log-odds: -1.4022  Comp: 0.4311  Suff: 0.3035  Time: 0.0371s
+[800]  Log-odds: -1.3686  Comp: 0.4203  Suff: 0.2989  Time: 0.0373s
+
+Final [872 samples]  Log-odds: -1.3814  Comp: 0.4223  Suff: 0.2962  Time: 0.0372s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    bert
+EVAL:     pad
+==========================================================
+Device        : cuda
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : pad
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.202592
+          is : +0.065898
+           a : -0.588482
+      really : -0.217505
+         bad : +3.922397
+       movie : -0.399459
+           , : -0.096388
+    although : +0.450250
+          it : +0.022462
+         has : -0.211775
+           a : +0.847884
+   promising : -0.261292
+       start : -0.196861
+           , : +1.090903
+          it : +0.432328
+       ended : +0.577652
+          on : -0.341690
+           a : +0.077406
+        very : +0.087459
+         low : +1.380864
+        note : -0.541161
+           . : +0.021053
+
+Starting PACE attribution computation...
+[100]  Log-odds: -1.2364  Comp: 0.3983  Suff: 0.2746  Time: 0.0378s
+[200]  Log-odds: -1.4473  Comp: 0.4367  Suff: 0.2827  Time: 0.0380s
+[300]  Log-odds: -1.4546  Comp: 0.4513  Suff: 0.2993  Time: 0.0377s
+[400]  Log-odds: -1.4273  Comp: 0.4304  Suff: 0.2910  Time: 0.0372s
+[500]  Log-odds: -1.4467  Comp: 0.4334  Suff: 0.2951  Time: 0.0374s
+[600]  Log-odds: -1.4058  Comp: 0.4258  Suff: 0.2967  Time: 0.0375s
+[700]  Log-odds: -1.4303  Comp: 0.4311  Suff: 0.3035  Time: 0.0375s
+[800]  Log-odds: -1.3970  Comp: 0.4203  Suff: 0.2989  Time: 0.0377s
+
+Final [872 samples]  Log-odds: -1.4180  Comp: 0.4223  Suff: 0.2962  Time: 0.0378s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    bert
+EVAL:     zero
+==========================================================
+Device        : cuda
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : zero
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.202592
+          is : +0.065898
+           a : -0.588482
+      really : -0.217505
+         bad : +3.922397
+       movie : -0.399459
+           , : -0.096388
+    although : +0.450250
+          it : +0.022462
+         has : -0.211775
+           a : +0.847884
+   promising : -0.261292
+       start : -0.196861
+           , : +1.090903
+          it : +0.432328
+       ended : +0.577652
+          on : -0.341690
+           a : +0.077406
+        very : +0.087459
+         low : +1.380864
+        note : -0.541161
+           . : +0.021053
+
+Starting PACE attribution computation...
+[100]  Log-odds: -1.6891  Comp: 0.3983  Suff: 0.2746  Time: 0.0380s
+[200]  Log-odds: -1.8770  Comp: 0.4367  Suff: 0.2827  Time: 0.0382s
+[300]  Log-odds: -1.8834  Comp: 0.4513  Suff: 0.2993  Time: 0.0382s
+[400]  Log-odds: -1.8247  Comp: 0.4304  Suff: 0.2910  Time: 0.0379s
+[500]  Log-odds: -1.8134  Comp: 0.4334  Suff: 0.2951  Time: 0.0381s
+[600]  Log-odds: -1.8274  Comp: 0.4258  Suff: 0.2967  Time: 0.0381s
+[700]  Log-odds: -1.8555  Comp: 0.4311  Suff: 0.3035  Time: 0.0380s
+[800]  Log-odds: -1.8381  Comp: 0.4203  Suff: 0.2989  Time: 0.0381s
+
+Final [872 samples]  Log-odds: -1.8643  Comp: 0.4223  Suff: 0.2962  Time: 0.0381s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    bert
+EVAL:     mean
+==========================================================
+Device        : cuda
+Model         : textattack/bert-base-uncased-SST-2
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : mean
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.202592
+          is : +0.065898
+           a : -0.588482
+      really : -0.217505
+         bad : +3.922397
+       movie : -0.399459
+           , : -0.096388
+    although : +0.450250
+          it : +0.022462
+         has : -0.211775
+           a : +0.847884
+   promising : -0.261292
+       start : -0.196861
+           , : +1.090903
+          it : +0.432328
+       ended : +0.577652
+          on : -0.341690
+           a : +0.077406
+        very : +0.087459
+         low : +1.380864
+        note : -0.541161
+           . : +0.021053
+
+Starting PACE attribution computation...
+[100]  Log-odds: -1.3982  Comp: 0.3983  Suff: 0.2746  Time: 0.0375s
+[200]  Log-odds: -1.5758  Comp: 0.4367  Suff: 0.2827  Time: 0.0374s
+[300]  Log-odds: -1.5824  Comp: 0.4513  Suff: 0.2993  Time: 0.0375s
+[400]  Log-odds: -1.5329  Comp: 0.4304  Suff: 0.2910  Time: 0.0374s
+[500]  Log-odds: -1.5563  Comp: 0.4334  Suff: 0.2951  Time: 0.0377s
+[600]  Log-odds: -1.5476  Comp: 0.4258  Suff: 0.2967  Time: 0.0376s
+[700]  Log-odds: -1.5653  Comp: 0.4311  Suff: 0.3035  Time: 0.0376s
+[800]  Log-odds: -1.5406  Comp: 0.4203  Suff: 0.2989  Time: 0.0377s
+
+Final [872 samples]  Log-odds: -1.5726  Comp: 0.4223  Suff: 0.2962  Time: 0.0377s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    roberta
+EVAL:     mask
+==========================================================
+Device        : cuda
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : mask
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        This : +0.066788
+         Ġis : -0.010220
+          Ġa : +0.017201
+     Ġreally : -0.741563
+        Ġbad : -4.616375
+      Ġmovie : +0.359028
+           , : +0.140594
+   Ġalthough : +0.090690
+         Ġit : -0.066998
+        Ġhas : -0.330574
+          Ġa : -0.161520
+  Ġpromising : +0.562355
+      Ġstart : +0.694865
+           , : +0.061650
+         Ġit : +0.116678
+      Ġended : +0.349500
+         Ġon : +0.169223
+          Ġa : +0.112720
+       Ġvery : -0.087596
+        Ġlow : -0.489415
+       Ġnote : +0.681437
+           . : +6.302023
+
+Starting PACE attribution computation...
+[100]  Log-odds: -1.7894  Comp: 0.3804  Suff: 0.1516  Time: 0.0376s
+[200]  Log-odds: -1.9663  Comp: 0.4386  Suff: 0.1801  Time: 0.0380s
+[300]  Log-odds: -1.8982  Comp: 0.4567  Suff: 0.1789  Time: 0.0385s
+[400]  Log-odds: -1.7671  Comp: 0.4225  Suff: 0.1813  Time: 0.0383s
+[500]  Log-odds: -1.7664  Comp: 0.4294  Suff: 0.1692  Time: 0.0386s
+[600]  Log-odds: -1.8039  Comp: 0.4315  Suff: 0.1726  Time: 0.0385s
+[700]  Log-odds: -1.8441  Comp: 0.4354  Suff: 0.1725  Time: 0.0384s
+[800]  Log-odds: -1.8140  Comp: 0.4292  Suff: 0.1689  Time: 0.0385s
+
+Final [872 samples]  Log-odds: -1.8229  Comp: 0.4313  Suff: 0.1687  Time: 0.0385s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    roberta
+EVAL:     pad
+==========================================================
+Device        : cuda
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : pad
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        This : +0.066788
+         Ġis : -0.010220
+          Ġa : +0.017201
+     Ġreally : -0.741563
+        Ġbad : -4.616375
+      Ġmovie : +0.359028
+           , : +0.140594
+   Ġalthough : +0.090690
+         Ġit : -0.066998
+        Ġhas : -0.330574
+          Ġa : -0.161520
+  Ġpromising : +0.562355
+      Ġstart : +0.694865
+           , : +0.061650
+         Ġit : +0.116678
+      Ġended : +0.349500
+         Ġon : +0.169223
+          Ġa : +0.112720
+       Ġvery : -0.087596
+        Ġlow : -0.489415
+       Ġnote : +0.681437
+           . : +6.302023
+
+Starting PACE attribution computation...
+[100]  Log-odds: -1.4985  Comp: 0.3804  Suff: 0.1516  Time: 0.0374s
+[200]  Log-odds: -1.7837  Comp: 0.4386  Suff: 0.1801  Time: 0.0377s
+[300]  Log-odds: -1.7168  Comp: 0.4567  Suff: 0.1789  Time: 0.0377s
+[400]  Log-odds: -1.6252  Comp: 0.4225  Suff: 0.1813  Time: 0.0374s
+[500]  Log-odds: -1.6202  Comp: 0.4294  Suff: 0.1692  Time: 0.0376s
+[600]  Log-odds: -1.6372  Comp: 0.4315  Suff: 0.1726  Time: 0.0376s
+[700]  Log-odds: -1.6542  Comp: 0.4354  Suff: 0.1725  Time: 0.0375s
+[800]  Log-odds: -1.6280  Comp: 0.4292  Suff: 0.1689  Time: 0.0376s
+
+Final [872 samples]  Log-odds: -1.6383  Comp: 0.4313  Suff: 0.1687  Time: 0.0376s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    roberta
+EVAL:     zero
+==========================================================
+Device        : cuda
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : zero
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        This : +0.066788
+         Ġis : -0.010220
+          Ġa : +0.017201
+     Ġreally : -0.741563
+        Ġbad : -4.616375
+      Ġmovie : +0.359028
+           , : +0.140594
+   Ġalthough : +0.090690
+         Ġit : -0.066998
+        Ġhas : -0.330574
+          Ġa : -0.161520
+  Ġpromising : +0.562355
+      Ġstart : +0.694865
+           , : +0.061650
+         Ġit : +0.116678
+      Ġended : +0.349500
+         Ġon : +0.169223
+          Ġa : +0.112720
+       Ġvery : -0.087596
+        Ġlow : -0.489415
+       Ġnote : +0.681437
+           . : +6.302023
+
+Starting PACE attribution computation...
+[100]  Log-odds: -1.6250  Comp: 0.3804  Suff: 0.1516  Time: 0.0405s
+[200]  Log-odds: -1.9084  Comp: 0.4386  Suff: 0.1801  Time: 0.0397s
+[300]  Log-odds: -1.8486  Comp: 0.4567  Suff: 0.1789  Time: 0.0400s
+[400]  Log-odds: -1.7485  Comp: 0.4225  Suff: 0.1813  Time: 0.0393s
+[500]  Log-odds: -1.7426  Comp: 0.4294  Suff: 0.1692  Time: 0.0393s
+[600]  Log-odds: -1.7770  Comp: 0.4315  Suff: 0.1726  Time: 0.0390s
+[700]  Log-odds: -1.7939  Comp: 0.4354  Suff: 0.1725  Time: 0.0387s
+[800]  Log-odds: -1.7693  Comp: 0.4292  Suff: 0.1689  Time: 0.0387s
+
+Final [872 samples]  Log-odds: -1.7850  Comp: 0.4313  Suff: 0.1687  Time: 0.0387s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    roberta
+EVAL:     mean
+==========================================================
+Device        : cuda
+Model         : textattack/roberta-base-SST-2
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : mean
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        This : +0.066788
+         Ġis : -0.010220
+          Ġa : +0.017201
+     Ġreally : -0.741563
+        Ġbad : -4.616375
+      Ġmovie : +0.359028
+           , : +0.140594
+   Ġalthough : +0.090690
+         Ġit : -0.066998
+        Ġhas : -0.330574
+          Ġa : -0.161520
+  Ġpromising : +0.562355
+      Ġstart : +0.694865
+           , : +0.061650
+         Ġit : +0.116678
+      Ġended : +0.349500
+         Ġon : +0.169223
+          Ġa : +0.112720
+       Ġvery : -0.087596
+        Ġlow : -0.489415
+       Ġnote : +0.681437
+           . : +6.302023
+
+Starting PACE attribution computation...
+[100]  Log-odds: -1.5226  Comp: 0.3804  Suff: 0.1516  Time: 0.0384s
+[200]  Log-odds: -1.8371  Comp: 0.4386  Suff: 0.1801  Time: 0.0387s
+[300]  Log-odds: -1.7744  Comp: 0.4567  Suff: 0.1789  Time: 0.0387s
+[400]  Log-odds: -1.6767  Comp: 0.4225  Suff: 0.1813  Time: 0.0383s
+[500]  Log-odds: -1.6630  Comp: 0.4294  Suff: 0.1692  Time: 0.0386s
+[600]  Log-odds: -1.6738  Comp: 0.4315  Suff: 0.1726  Time: 0.0386s
+[700]  Log-odds: -1.6939  Comp: 0.4354  Suff: 0.1725  Time: 0.0385s
+[800]  Log-odds: -1.6697  Comp: 0.4292  Suff: 0.1689  Time: 0.0386s
+
+Final [872 samples]  Log-odds: -1.6815  Comp: 0.4313  Suff: 0.1687  Time: 0.0385s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    distilbert
+EVAL:     mask
+==========================================================
+Device        : cuda
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : mask
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.113062
+          is : +0.054795
+           a : +0.110062
+      really : +0.385992
+         bad : +1.608066
+       movie : +0.006011
+           , : +0.117191
+    although : +0.085453
+          it : +0.083110
+         has : +0.073126
+           a : +0.053099
+   promising : +0.004883
+       start : +0.101072
+           , : +0.106987
+          it : +0.109169
+       ended : +0.167604
+          on : +0.025160
+           a : +0.176184
+        very : +0.361090
+         low : +0.877135
+        note : -0.019182
+           . : +0.065203
+
+Starting PACE attribution computation...
+[100]  Log-odds: -2.3921  Comp: 0.4976  Suff: 0.1041  Time: 0.0218s
+[200]  Log-odds: -2.6111  Comp: 0.5587  Suff: 0.0906  Time: 0.0218s
+[300]  Log-odds: -2.4577  Comp: 0.5584  Suff: 0.0946  Time: 0.0219s
+[400]  Log-odds: -2.3097  Comp: 0.5249  Suff: 0.0932  Time: 0.0218s
+[500]  Log-odds: -2.2182  Comp: 0.5039  Suff: 0.0938  Time: 0.0219s
+[600]  Log-odds: -2.2050  Comp: 0.5016  Suff: 0.0918  Time: 0.0219s
+[700]  Log-odds: -2.2073  Comp: 0.5025  Suff: 0.1009  Time: 0.0219s
+[800]  Log-odds: -2.1895  Comp: 0.4971  Suff: 0.0951  Time: 0.0219s
+
+Final [872 samples]  Log-odds: -2.2009  Comp: 0.4948  Suff: 0.0926  Time: 0.0219s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    distilbert
+EVAL:     pad
+==========================================================
+Device        : cuda
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : pad
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.113062
+          is : +0.054795
+           a : +0.110062
+      really : +0.385992
+         bad : +1.608066
+       movie : +0.006011
+           , : +0.117191
+    although : +0.085453
+          it : +0.083110
+         has : +0.073126
+           a : +0.053099
+   promising : +0.004883
+       start : +0.101072
+           , : +0.106987
+          it : +0.109169
+       ended : +0.167604
+          on : +0.025160
+           a : +0.176184
+        very : +0.361090
+         low : +0.877135
+        note : -0.019182
+           . : +0.065203
+
+Starting PACE attribution computation...
+[100]  Log-odds: -2.3978  Comp: 0.4976  Suff: 0.1041  Time: 0.0196s
+[200]  Log-odds: -2.6046  Comp: 0.5587  Suff: 0.0906  Time: 0.0190s
+[300]  Log-odds: -2.4488  Comp: 0.5584  Suff: 0.0946  Time: 0.0198s
+[400]  Log-odds: -2.2816  Comp: 0.5249  Suff: 0.0932  Time: 0.0202s
+[500]  Log-odds: -2.2052  Comp: 0.5039  Suff: 0.0938  Time: 0.0207s
+[600]  Log-odds: -2.1942  Comp: 0.5016  Suff: 0.0918  Time: 0.0209s
+[700]  Log-odds: -2.1954  Comp: 0.5025  Suff: 0.1009  Time: 0.0210s
+[800]  Log-odds: -2.1723  Comp: 0.4971  Suff: 0.0951  Time: 0.0212s
+
+Final [872 samples]  Log-odds: -2.1827  Comp: 0.4948  Suff: 0.0926  Time: 0.0213s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    distilbert
+EVAL:     zero
+==========================================================
+Device        : cuda
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : zero
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.113062
+          is : +0.054795
+           a : +0.110062
+      really : +0.385992
+         bad : +1.608066
+       movie : +0.006011
+           , : +0.117191
+    although : +0.085453
+          it : +0.083110
+         has : +0.073126
+           a : +0.053099
+   promising : +0.004883
+       start : +0.101072
+           , : +0.106987
+          it : +0.109169
+       ended : +0.167604
+          on : +0.025160
+           a : +0.176184
+        very : +0.361090
+         low : +0.877135
+        note : -0.019182
+           . : +0.065203
+
+Starting PACE attribution computation...
+[100]  Log-odds: -2.2993  Comp: 0.4976  Suff: 0.1041  Time: 0.0215s
+[200]  Log-odds: -2.5511  Comp: 0.5587  Suff: 0.0906  Time: 0.0215s
+[300]  Log-odds: -2.3889  Comp: 0.5584  Suff: 0.0946  Time: 0.0216s
+[400]  Log-odds: -2.2691  Comp: 0.5249  Suff: 0.0932  Time: 0.0215s
+[500]  Log-odds: -2.2661  Comp: 0.5039  Suff: 0.0938  Time: 0.0216s
+[600]  Log-odds: -2.2258  Comp: 0.5016  Suff: 0.0918  Time: 0.0216s
+[700]  Log-odds: -2.2390  Comp: 0.5025  Suff: 0.1009  Time: 0.0215s
+[800]  Log-odds: -2.2194  Comp: 0.4971  Suff: 0.0951  Time: 0.0216s
+
+Final [872 samples]  Log-odds: -2.2636  Comp: 0.4948  Suff: 0.0926  Time: 0.0216s
+
+
+==========================================================
+SCRIPT:   run_eval_pg_sentiment.py
+MODEL:    distilbert
+EVAL:     mean
+==========================================================
+Device        : cuda
+Model         : distilbert-base-uncased-finetuned-sst-2-english
+Dataset       : sst2
+PG baseline   : mask
+Eval baseline : mean
+Range         : [0, 1]  steps=100
+
+Smoke test:
+        this : +0.113062
+          is : +0.054795
+           a : +0.110062
+      really : +0.385992
+         bad : +1.608066
+       movie : +0.006011
+           , : +0.117191
+    although : +0.085453
+          it : +0.083110
+         has : +0.073126
+           a : +0.053099
+   promising : +0.004883
+       start : +0.101072
+           , : +0.106987
+          it : +0.109169
+       ended : +0.167604
+          on : +0.025160
+           a : +0.176184
+        very : +0.361090
+         low : +0.877135
+        note : -0.019182
+           . : +0.065203
+
+Starting PACE attribution computation...
+[100]  Log-odds: -2.2682  Comp: 0.4976  Suff: 0.1041  Time: 0.0216s
+[200]  Log-odds: -2.5595  Comp: 0.5587  Suff: 0.0906  Time: 0.0216s
+[300]  Log-odds: -2.5310  Comp: 0.5584  Suff: 0.0946  Time: 0.0217s
+[400]  Log-odds: -2.4215  Comp: 0.5249  Suff: 0.0932  Time: 0.0216s
+[500]  Log-odds: -2.4054  Comp: 0.5039  Suff: 0.0938  Time: 0.0217s
+[600]  Log-odds: -2.3056  Comp: 0.5016  Suff: 0.0918  Time: 0.0217s
+[700]  Log-odds: -2.3246  Comp: 0.5025  Suff: 0.1009  Time: 0.0217s
+[800]  Log-odds: -2.3099  Comp: 0.4971  Suff: 0.0951  Time: 0.0217s
+
+Final [872 samples]  Log-odds: -2.3325  Comp: 0.4948  Suff: 0.0926  Time: 0.0217s
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    bert
+EVAL:     mask
+==========================================================
+Device        : cuda
+Model         : bert / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : mask
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-0.6877  comp=0.2316  suff=0.1904  time=1.3637s
+
+[200/872]  log-odds=-0.6061  comp=0.2146  suff=0.2313  time=1.3630s
+
+[300/872]  log-odds=-0.6055  comp=0.2137  suff=0.2236  time=1.3350s
+
+[400/872]  log-odds=-0.6133  comp=0.2158  suff=0.2147  time=1.3070s
+
+[500/872]  log-odds=-0.5997  comp=0.2152  suff=0.2049  time=1.2904s
+
+[600/872]  log-odds=-0.6311  comp=0.2226  suff=0.2059  time=1.2903s
+
+[700/872]  log-odds=-0.6900  comp=0.2343  suff=0.2084  time=1.3025s
+
+[800/872]  log-odds=-0.6973  comp=0.2335  suff=0.2073  time=1.3086s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  bert / sst2
+  Log-odds         : -0.695437
+  Comprehensiveness: 0.231182
+  Sufficiency      : 0.213348
+  Avg time/sample  : 1.3014s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    bert
+EVAL:     pad
+==========================================================
+Device        : cuda
+Model         : bert / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : pad
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-0.7367  comp=0.2207  suff=0.4733  time=1.3507s
+
+[200/872]  log-odds=-0.6080  comp=0.1984  suff=0.4430  time=1.3906s
+
+[300/872]  log-odds=-0.6171  comp=0.1975  suff=0.4359  time=1.3423s
+
+[400/872]  log-odds=-0.6259  comp=0.1992  suff=0.4421  time=1.3595s
+
+[500/872]  log-odds=-0.6359  comp=0.2011  suff=0.4499  time=1.3364s
+
+[600/872]  log-odds=-0.6707  comp=0.2064  suff=0.4345  time=1.3200s
+
+[700/872]  log-odds=-0.7269  comp=0.2166  suff=0.4346  time=1.3287s
+
+[800/872]  log-odds=-0.7363  comp=0.2156  suff=0.4359  time=1.3177s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  bert / sst2
+  Log-odds         : -0.734413
+  Comprehensiveness: 0.213998
+  Sufficiency      : 0.437593
+  Avg time/sample  : 1.2966s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    bert
+EVAL:     zero
+==========================================================
+Device        : cuda
+Model         : bert / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : zero
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-0.9277  comp=0.2488  suff=0.2527  time=1.2441s
+
+[200/872]  log-odds=-0.9473  comp=0.2452  suff=0.2816  time=1.2919s
+
+[300/872]  log-odds=-0.9066  comp=0.2374  suff=0.2851  time=1.3128s
+
+[400/872]  log-odds=-0.8987  comp=0.2343  suff=0.2662  time=1.2914s
+
+[500/872]  log-odds=-0.9065  comp=0.2344  suff=0.2580  time=1.2731s
+
+[600/872]  log-odds=-0.9453  comp=0.2418  suff=0.2453  time=1.2653s
+
+[700/872]  log-odds=-1.0012  comp=0.2528  suff=0.2435  time=1.2601s
+
+[800/872]  log-odds=-1.0022  comp=0.2505  suff=0.2421  time=1.2544s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  bert / sst2
+  Log-odds         : -1.000539
+  Comprehensiveness: 0.249694
+  Sufficiency      : 0.250760
+  Avg time/sample  : 1.2521s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    bert
+EVAL:     mean
+==========================================================
+Device        : cuda
+Model         : bert / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : mean
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-0.7689  comp=0.2192  suff=0.3827  time=1.2482s
+
+[200/872]  log-odds=-0.6377  comp=0.1971  suff=0.3750  time=1.2580s
+
+[300/872]  log-odds=-0.6505  comp=0.1979  suff=0.3725  time=1.2603s
+
+[400/872]  log-odds=-0.6629  comp=0.2018  suff=0.3691  time=1.2669s
+
+[500/872]  log-odds=-0.6626  comp=0.2019  suff=0.3775  time=1.2602s
+
+[600/872]  log-odds=-0.6865  comp=0.2070  suff=0.3614  time=1.2562s
+
+[700/872]  log-odds=-0.7452  comp=0.2195  suff=0.3640  time=1.2538s
+
+[800/872]  log-odds=-0.7537  comp=0.2178  suff=0.3666  time=1.2512s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  bert / sst2
+  Log-odds         : -0.753725
+  Comprehensiveness: 0.216828
+  Sufficiency      : 0.369020
+  Avg time/sample  : 1.2495s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    roberta
+EVAL:     mask
+==========================================================
+Device        : cuda
+Model         : roberta / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : mask
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-1.1298  comp=0.2458  suff=0.1757  time=0.9510s
+
+[200/872]  log-odds=-1.0018  comp=0.2287  suff=0.1761  time=1.0140s
+
+[300/872]  log-odds=-0.9191  comp=0.2082  suff=0.1984  time=0.9847s
+
+[400/872]  log-odds=-0.9175  comp=0.2081  suff=0.1802  time=1.0496s
+
+[500/872]  log-odds=-0.9309  comp=0.2061  suff=0.1783  time=1.0823s
+
+[600/872]  log-odds=-0.9916  comp=0.2174  suff=0.1839  time=1.1081s
+
+[700/872]  log-odds=-1.0423  comp=0.2267  suff=0.1890  time=1.1280s
+
+[800/872]  log-odds=-1.0476  comp=0.2290  suff=0.1828  time=1.1426s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  roberta / sst2
+  Log-odds         : -1.037435
+  Comprehensiveness: 0.228661
+  Sufficiency      : 0.177625
+  Avg time/sample  : 1.1510s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    roberta
+EVAL:     pad
+==========================================================
+Device        : cuda
+Model         : roberta / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : pad
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-1.0540  comp=0.2586  suff=0.1958  time=1.5007s
+
+[200/872]  log-odds=-1.0707  comp=0.2655  suff=0.2017  time=1.4089s
+
+[300/872]  log-odds=-0.9594  comp=0.2374  suff=0.2196  time=1.3928s
+
+[400/872]  log-odds=-0.9621  comp=0.2408  suff=0.2037  time=1.3757s
+
+[500/872]  log-odds=-0.9422  comp=0.2329  suff=0.2058  time=1.3843s
+
+[600/872]  log-odds=-1.0342  comp=0.2480  suff=0.2100  time=1.3119s
+
+[700/872]  log-odds=-1.0245  comp=0.2473  suff=0.2168  time=1.3131s
+
+[800/872]  log-odds=-1.0118  comp=0.2451  suff=0.2115  time=1.3192s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  roberta / sst2
+  Log-odds         : -1.006488
+  Comprehensiveness: 0.245699
+  Sufficiency      : 0.208042
+  Avg time/sample  : 1.3164s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    roberta
+EVAL:     zero
+==========================================================
+Device        : cuda
+Model         : roberta / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : zero
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-1.2179  comp=0.2752  suff=0.1810  time=1.4149s
+
+[200/872]  log-odds=-1.2274  comp=0.2733  suff=0.1830  time=1.3313s
+
+[300/872]  log-odds=-1.0664  comp=0.2401  suff=0.1970  time=1.2764s
+
+[400/872]  log-odds=-1.0624  comp=0.2422  suff=0.1857  time=1.2982s
+
+[500/872]  log-odds=-1.0438  comp=0.2369  suff=0.1838  time=1.2906s
+
+[600/872]  log-odds=-1.1428  comp=0.2533  suff=0.1920  time=1.2899s
+
+[700/872]  log-odds=-1.1459  comp=0.2553  suff=0.1989  time=1.3040s
+
+[800/872]  log-odds=-1.1333  comp=0.2546  suff=0.1942  time=1.3075s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  roberta / sst2
+  Log-odds         : -1.126443
+  Comprehensiveness: 0.253920
+  Sufficiency      : 0.191031
+  Avg time/sample  : 1.3032s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    roberta
+EVAL:     mean
+==========================================================
+Device        : cuda
+Model         : roberta / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : mean
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-1.1343  comp=0.2701  suff=0.1959  time=1.5175s
+
+[200/872]  log-odds=-1.1789  comp=0.2854  suff=0.2052  time=1.5158s
+
+[300/872]  log-odds=-1.0379  comp=0.2544  suff=0.2225  time=1.5152s
+
+[400/872]  log-odds=-1.0424  comp=0.2556  suff=0.2065  time=1.4867s
+
+[500/872]  log-odds=-1.0104  comp=0.2479  suff=0.2056  time=1.4926s
+
+[600/872]  log-odds=-1.1141  comp=0.2646  suff=0.2110  time=1.4774s
+
+[700/872]  log-odds=-1.1029  comp=0.2633  suff=0.2174  time=1.3857s
+
+[800/872]  log-odds=-1.0889  comp=0.2615  suff=0.2115  time=1.3495s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  roberta / sst2
+  Log-odds         : -1.082376
+  Comprehensiveness: 0.262136
+  Sufficiency      : 0.208215
+  Avg time/sample  : 1.3631s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    distilbert
+EVAL:     mask
+==========================================================
+Device        : cuda
+Model         : distilbert / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : mask
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-1.1954  comp=0.2839  suff=0.2446  time=1.2642s
+
+[200/872]  log-odds=-1.2440  comp=0.2812  suff=0.2800  time=1.2969s
+
+[300/872]  log-odds=-1.1207  comp=0.2611  suff=0.2645  time=1.2808s
+
+[400/872]  log-odds=-1.0878  comp=0.2517  suff=0.2622  time=1.2596s
+
+[500/872]  log-odds=-1.0663  comp=0.2538  suff=0.2504  time=1.2292s
+
+[600/872]  log-odds=-1.1061  comp=0.2601  suff=0.2434  time=1.2201s
+
+[700/872]  log-odds=-1.1417  comp=0.2645  suff=0.2468  time=1.2105s
+
+[800/872]  log-odds=-1.1422  comp=0.2617  suff=0.2443  time=1.2127s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  distilbert / sst2
+  Log-odds         : -1.153975
+  Comprehensiveness: 0.263417
+  Sufficiency      : 0.243752
+  Avg time/sample  : 1.2044s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    distilbert
+EVAL:     pad
+==========================================================
+Device        : cuda
+Model         : distilbert / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : pad
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-1.0837  comp=0.2674  suff=0.4038  time=1.3568s
+
+[200/872]  log-odds=-1.1674  comp=0.2834  suff=0.4144  time=1.2954s
+
+[300/872]  log-odds=-1.0465  comp=0.2647  suff=0.4096  time=1.2368s
+
+[400/872]  log-odds=-0.9965  comp=0.2464  suff=0.4164  time=1.2053s
+
+[500/872]  log-odds=-0.9775  comp=0.2468  suff=0.4142  time=1.1865s
+
+[600/872]  log-odds=-0.9978  comp=0.2472  suff=0.3962  time=1.2159s
+
+[700/872]  log-odds=-1.0331  comp=0.2534  suff=0.3981  time=1.2144s
+
+[800/872]  log-odds=-1.0318  comp=0.2513  suff=0.4005  time=1.2010s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  distilbert / sst2
+  Log-odds         : -1.037413
+  Comprehensiveness: 0.252585
+  Sufficiency      : 0.399110
+  Avg time/sample  : 1.1943s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    distilbert
+EVAL:     zero
+==========================================================
+Device        : cuda
+Model         : distilbert / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : zero
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-1.0862  comp=0.2727  suff=0.4350  time=1.3837s
+
+[200/872]  log-odds=-1.1463  comp=0.2928  suff=0.4502  time=1.3796s
+
+[300/872]  log-odds=-1.0137  comp=0.2729  suff=0.4457  time=1.3512s
+
+[400/872]  log-odds=-0.9170  comp=0.2446  suff=0.4439  time=1.3027s
+
+[500/872]  log-odds=-0.9274  comp=0.2430  suff=0.4442  time=1.3176s
+
+[600/872]  log-odds=-0.9291  comp=0.2390  suff=0.4226  time=1.3200s
+
+[700/872]  log-odds=-0.9387  comp=0.2460  suff=0.4232  time=1.3071s
+
+[800/872]  log-odds=-0.9080  comp=0.2422  suff=0.4210  time=1.2948s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  distilbert / sst2
+  Log-odds         : -0.921313
+  Comprehensiveness: 0.245228
+  Sufficiency      : 0.418415
+  Avg time/sample  : 1.2818s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_slalom_eval_sentiment.py
+MODEL:    distilbert
+EVAL:     mean
+==========================================================
+Device        : cuda
+Model         : distilbert / sst2
+SLALOM mode   : lin
+Top-k         : 20%
+Eval baseline : mean
+Samples       : 872
+[SLALOM format] list_2tuple_single
+
+[100/872]  log-odds=-0.8938  comp=0.2585  suff=0.5250  time=1.1532s
+
+[200/872]  log-odds=-1.0581  comp=0.2951  suff=0.5266  time=1.2096s
+
+[300/872]  log-odds=-1.0693  comp=0.2988  suff=0.5157  time=1.2695s
+
+[400/872]  log-odds=-0.9642  comp=0.2675  suff=0.5182  time=1.2994s
+
+[500/872]  log-odds=-0.9956  comp=0.2733  suff=0.5268  time=1.3177s
+
+[600/872]  log-odds=-0.9544  comp=0.2625  suff=0.5052  time=1.3257s
+
+[700/872]  log-odds=-1.0127  comp=0.2722  suff=0.5029  time=1.2939s
+
+[800/872]  log-odds=-0.9974  comp=0.2735  suff=0.5042  time=1.2699s
+
+────────────────────────────────────────────────────
+SLALOM (lin)  |  distilbert / sst2
+  Log-odds         : -1.008921
+  Comprehensiveness: 0.276437
+  Sufficiency      : 0.504336
+  Avg time/sample  : 1.2558s
+  Evaluated        : 872  |  Errors: 0
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    bert
+EVAL:     mask
+==========================================================
+Device        : cuda
+Classifier    : textattack/bert-base-uncased-SST-2
+MLM oracle    : textattack/bert-base-uncased-SST-2  (top_k=3)
+Dataset       : sst2
+Eval baseline : mask
+Samples       : 872
+
+[100/872]  log-odds=-0.9818  comp=0.3761  suff=0.3149  time=0.7402s
+
+[200/872]  log-odds=-1.0931  comp=0.3737  suff=0.3291  time=0.7382s
+
+[300/872]  log-odds=-1.0384  comp=0.3852  suff=0.3438  time=0.7459s
+
+[400/872]  log-odds=-0.9600  comp=0.3654  suff=0.3540  time=0.7346s
+
+[500/872]  log-odds=-0.9472  comp=0.3598  suff=0.3478  time=0.7478s
+
+[600/872]  log-odds=-0.9565  comp=0.3565  suff=0.3379  time=0.7448s
+
+[700/872]  log-odds=-1.0246  comp=0.3662  suff=0.3471  time=0.7370s
+
+[800/872]  log-odds=-1.0044  comp=0.3517  suff=0.3405  time=0.7415s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  bert / sst2
+  Log-odds         : -1.010837
+  Comprehensiveness: 0.354624
+  Sufficiency      : 0.339290
+  Avg time/sample  : 0.7423s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+ERROR: run_eval_reagent_sentiment.py failed for bert (Eval Baseline: mask)
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    bert
+EVAL:     pad
+==========================================================
+Device        : cuda
+Classifier    : textattack/bert-base-uncased-SST-2
+MLM oracle    : textattack/bert-base-uncased-SST-2  (top_k=3)
+Dataset       : sst2
+Eval baseline : pad
+Samples       : 872
+
+[100/872]  log-odds=-1.2620  comp=0.3761  suff=0.3149  time=0.7397s
+
+[200/872]  log-odds=-1.3637  comp=0.3737  suff=0.3291  time=0.7366s
+
+[300/872]  log-odds=-1.3532  comp=0.3852  suff=0.3438  time=0.7446s
+
+[400/872]  log-odds=-1.2625  comp=0.3654  suff=0.3540  time=0.7332s
+
+[500/872]  log-odds=-1.2491  comp=0.3598  suff=0.3478  time=0.7464s
+
+[600/872]  log-odds=-1.2051  comp=0.3565  suff=0.3379  time=0.7434s
+
+[700/872]  log-odds=-1.2404  comp=0.3662  suff=0.3471  time=0.7357s
+
+[800/872]  log-odds=-1.2058  comp=0.3517  suff=0.3405  time=0.7402s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  bert / sst2
+  Log-odds         : -1.216128
+  Comprehensiveness: 0.354624
+  Sufficiency      : 0.339290
+  Avg time/sample  : 0.7410s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+ERROR: run_eval_reagent_sentiment.py failed for bert (Eval Baseline: pad)
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    bert
+EVAL:     zero
+==========================================================
+Device        : cuda
+Classifier    : textattack/bert-base-uncased-SST-2
+MLM oracle    : textattack/bert-base-uncased-SST-2  (top_k=3)
+Dataset       : sst2
+Eval baseline : zero
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    bert
+EVAL:     mask
+==========================================================
+Device        : cuda
+Classifier    : textattack/bert-base-uncased-SST-2
+MLM oracle    : textattack/bert-base-uncased-SST-2  (top_k=3)
+Dataset       : sst2
+Eval baseline : mask
+Samples       : 872
+
+[100/872]  log-odds=-0.9818  comp=0.3761  suff=0.3149  time=0.7581s
+
+[200/872]  log-odds=-1.0931  comp=0.3737  suff=0.3291  time=0.7530s
+
+[300/872]  log-odds=-1.0384  comp=0.3852  suff=0.3438  time=0.7609s
+
+[400/872]  log-odds=-0.9600  comp=0.3654  suff=0.3540  time=0.7494s
+
+[500/872]  log-odds=-0.9472  comp=0.3598  suff=0.3478  time=0.7632s
+
+[600/872]  log-odds=-0.9565  comp=0.3565  suff=0.3379  time=0.7604s
+
+[700/872]  log-odds=-1.0246  comp=0.3662  suff=0.3471  time=0.7525s
+
+[800/872]  log-odds=-1.0044  comp=0.3517  suff=0.3405  time=0.7574s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  bert / sst2
+  Log-odds         : -1.010837
+  Comprehensiveness: 0.354624
+  Sufficiency      : 0.339290
+  Avg time/sample  : 0.7581s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    bert
+EVAL:     pad
+==========================================================
+Device        : cuda
+Classifier    : textattack/bert-base-uncased-SST-2
+MLM oracle    : textattack/bert-base-uncased-SST-2  (top_k=3)
+Dataset       : sst2
+Eval baseline : pad
+Samples       : 872
+
+[100/872]  log-odds=-1.2620  comp=0.3761  suff=0.3149  time=0.7610s
+
+[200/872]  log-odds=-1.3637  comp=0.3737  suff=0.3291  time=0.7568s
+
+[300/872]  log-odds=-1.3532  comp=0.3852  suff=0.3438  time=0.7656s
+
+[400/872]  log-odds=-1.2625  comp=0.3654  suff=0.3540  time=0.7540s
+
+[500/872]  log-odds=-1.2491  comp=0.3598  suff=0.3478  time=0.7677s
+
+[600/872]  log-odds=-1.2051  comp=0.3565  suff=0.3379  time=0.7647s
+
+[700/872]  log-odds=-1.2404  comp=0.3662  suff=0.3471  time=0.7569s
+
+[800/872]  log-odds=-1.2058  comp=0.3517  suff=0.3405  time=0.7616s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  bert / sst2
+  Log-odds         : -1.216128
+  Comprehensiveness: 0.354624
+  Sufficiency      : 0.339290
+  Avg time/sample  : 0.7623s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    bert
+EVAL:     zero
+==========================================================
+Device        : cuda
+Classifier    : textattack/bert-base-uncased-SST-2
+MLM oracle    : textattack/bert-base-uncased-SST-2  (top_k=3)
+Dataset       : sst2
+Eval baseline : zero
+Samples       : 872
+
+[100/872]  log-odds=-1.3170  comp=0.3761  suff=0.3149  time=0.7623s
+
+[200/872]  log-odds=-1.4982  comp=0.3737  suff=0.3291  time=0.7592s
+
+[300/872]  log-odds=-1.4827  comp=0.3852  suff=0.3438  time=0.7673s
+
+[400/872]  log-odds=-1.3768  comp=0.3654  suff=0.3540  time=0.7557s
+
+[500/872]  log-odds=-1.3307  comp=0.3598  suff=0.3478  time=0.7695s
+
+[600/872]  log-odds=-1.3700  comp=0.3565  suff=0.3379  time=0.7665s
+
+[700/872]  log-odds=-1.3933  comp=0.3662  suff=0.3471  time=0.7587s
+
+[800/872]  log-odds=-1.3488  comp=0.3517  suff=0.3405  time=0.7633s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  bert / sst2
+  Log-odds         : -1.354398
+  Comprehensiveness: 0.354624
+  Sufficiency      : 0.339290
+  Avg time/sample  : 0.7641s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    bert
+EVAL:     mean
+==========================================================
+Device        : cuda
+Classifier    : textattack/bert-base-uncased-SST-2
+MLM oracle    : textattack/bert-base-uncased-SST-2  (top_k=3)
+Dataset       : sst2
+Eval baseline : mean
+Samples       : 872
+
+[100/872]  log-odds=-1.0515  comp=0.3761  suff=0.3149  time=0.7385s
+
+[200/872]  log-odds=-1.2594  comp=0.3737  suff=0.3291  time=0.7349s
+
+[300/872]  log-odds=-1.2567  comp=0.3852  suff=0.3438  time=0.7423s
+
+[400/872]  log-odds=-1.1756  comp=0.3654  suff=0.3540  time=0.7321s
+
+[500/872]  log-odds=-1.1435  comp=0.3598  suff=0.3478  time=0.7452s
+
+[600/872]  log-odds=-1.1722  comp=0.3565  suff=0.3379  time=0.7422s
+
+[700/872]  log-odds=-1.2168  comp=0.3662  suff=0.3471  time=0.7345s
+
+[800/872]  log-odds=-1.1858  comp=0.3517  suff=0.3405  time=0.7389s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  bert / sst2
+  Log-odds         : -1.196944
+  Comprehensiveness: 0.354624
+  Sufficiency      : 0.339290
+  Avg time/sample  : 0.7397s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    roberta
+EVAL:     mask
+==========================================================
+Device        : cuda
+Classifier    : textattack/roberta-base-SST-2
+MLM oracle    : textattack/roberta-base-SST-2  (top_k=3)
+Dataset       : sst2
+Eval baseline : mask
+Samples       : 872
+
+[100/872]  log-odds=-1.2848  comp=0.3152  suff=0.2328  time=0.8585s
+
+[200/872]  log-odds=-1.4526  comp=0.3710  suff=0.2431  time=0.8591s
+
+[300/872]  log-odds=-1.4393  comp=0.3892  suff=0.2493  time=0.8716s
+
+[400/872]  log-odds=-1.3713  comp=0.3692  suff=0.2355  time=0.8563s
+
+[500/872]  log-odds=-1.3254  comp=0.3607  suff=0.2298  time=0.8694s
+
+[600/872]  log-odds=-1.3347  comp=0.3615  suff=0.2325  time=0.8656s
+
+[700/872]  log-odds=-1.3458  comp=0.3571  suff=0.2404  time=0.8577s
+
+[800/872]  log-odds=-1.3361  comp=0.3515  suff=0.2389  time=0.8628s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  roberta / sst2
+  Log-odds         : -1.317853
+  Comprehensiveness: 0.346847
+  Sufficiency      : 0.234335
+  Avg time/sample  : 0.8633s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    roberta
+EVAL:     pad
+==========================================================
+Device        : cuda
+Classifier    : textattack/roberta-base-SST-2
+MLM oracle    : textattack/roberta-base-SST-2  (top_k=3)
+Dataset       : sst2
+Eval baseline : pad
+Samples       : 872
+
+[100/872]  log-odds=-1.0026  comp=0.3152  suff=0.2328  time=0.8303s
+
+[200/872]  log-odds=-1.2117  comp=0.3710  suff=0.2431  time=0.8327s
+
+[300/872]  log-odds=-1.2286  comp=0.3892  suff=0.2493  time=0.8434s
+
+[400/872]  log-odds=-1.1845  comp=0.3692  suff=0.2355  time=0.8276s
+
+[500/872]  log-odds=-1.1635  comp=0.3607  suff=0.2298  time=0.8397s
+
+[600/872]  log-odds=-1.1814  comp=0.3615  suff=0.2325  time=0.8358s
+
+[700/872]  log-odds=-1.1835  comp=0.3571  suff=0.2404  time=0.8279s
+
+[800/872]  log-odds=-1.1503  comp=0.3515  suff=0.2389  time=0.8325s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  roberta / sst2
+  Log-odds         : -1.147834
+  Comprehensiveness: 0.346847
+  Sufficiency      : 0.234335
+  Avg time/sample  : 0.8332s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    roberta
+EVAL:     zero
+==========================================================
+Device        : cuda
+Classifier    : textattack/roberta-base-SST-2
+MLM oracle    : textattack/roberta-base-SST-2  (top_k=3)
+Dataset       : sst2
+Eval baseline : zero
+Samples       : 872
+
+[100/872]  log-odds=-1.0799  comp=0.3152  suff=0.2328  time=0.8376s
+
+[200/872]  log-odds=-1.3166  comp=0.3710  suff=0.2431  time=0.8410s
+
+[300/872]  log-odds=-1.3674  comp=0.3892  suff=0.2493  time=0.8537s
+
+[400/872]  log-odds=-1.3060  comp=0.3692  suff=0.2355  time=0.8383s
+
+[500/872]  log-odds=-1.2722  comp=0.3607  suff=0.2298  time=0.8509s
+
+[600/872]  log-odds=-1.2973  comp=0.3615  suff=0.2325  time=0.8471s
+
+[700/872]  log-odds=-1.2971  comp=0.3571  suff=0.2404  time=0.8391s
+
+[800/872]  log-odds=-1.2717  comp=0.3515  suff=0.2389  time=0.8439s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  roberta / sst2
+  Log-odds         : -1.265322
+  Comprehensiveness: 0.346847
+  Sufficiency      : 0.234335
+  Avg time/sample  : 0.8446s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    roberta
+EVAL:     mean
+==========================================================
+Device        : cuda
+Classifier    : textattack/roberta-base-SST-2
+MLM oracle    : textattack/roberta-base-SST-2  (top_k=3)
+Dataset       : sst2
+Eval baseline : mean
+Samples       : 872
+
+[100/872]  log-odds=-1.0327  comp=0.3152  suff=0.2328  time=0.8662s
+
+[200/872]  log-odds=-1.2515  comp=0.3710  suff=0.2431  time=0.8673s
+
+[300/872]  log-odds=-1.2625  comp=0.3892  suff=0.2493  time=0.8800s
+
+[400/872]  log-odds=-1.2048  comp=0.3692  suff=0.2355  time=0.8646s
+
+[500/872]  log-odds=-1.1820  comp=0.3607  suff=0.2298  time=0.8779s
+
+[600/872]  log-odds=-1.2087  comp=0.3615  suff=0.2325  time=0.8740s
+
+[700/872]  log-odds=-1.2169  comp=0.3571  suff=0.2404  time=0.8660s
+
+[800/872]  log-odds=-1.1836  comp=0.3515  suff=0.2389  time=0.8710s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  roberta / sst2
+  Log-odds         : -1.178459
+  Comprehensiveness: 0.346847
+  Sufficiency      : 0.234335
+  Avg time/sample  : 0.8717s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    distilbert
+EVAL:     mask
+==========================================================
+Device        : cuda
+Classifier    : distilbert-base-uncased-finetuned-sst-2-english
+MLM oracle    : distilbert-base-uncased-finetuned-sst-2-english  (top_k=3)
+Dataset       : sst2
+Eval baseline : mask
+Samples       : 872
+
+[100/872]  log-odds=-1.6636  comp=0.4046  suff=0.0965  time=0.3881s
+
+[200/872]  log-odds=-1.8875  comp=0.4354  suff=0.1128  time=0.3817s
+
+[300/872]  log-odds=-1.6783  comp=0.4140  suff=0.1263  time=0.3853s
+
+[400/872]  log-odds=-1.5343  comp=0.3812  suff=0.1329  time=0.3806s
+
+[500/872]  log-odds=-1.4894  comp=0.3674  suff=0.1343  time=0.3884s
+
+[600/872]  log-odds=-1.5179  comp=0.3702  suff=0.1336  time=0.3878s
+
+[700/872]  log-odds=-1.5679  comp=0.3759  suff=0.1359  time=0.3839s
+
+[800/872]  log-odds=-1.5396  comp=0.3655  suff=0.1387  time=0.3866s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  distilbert / sst2
+  Log-odds         : -1.540525
+  Comprehensiveness: 0.365602
+  Sufficiency      : 0.136656
+  Avg time/sample  : 0.3868s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    distilbert
+EVAL:     pad
+==========================================================
+Device        : cuda
+Classifier    : distilbert-base-uncased-finetuned-sst-2-english
+MLM oracle    : distilbert-base-uncased-finetuned-sst-2-english  (top_k=3)
+Dataset       : sst2
+Eval baseline : pad
+Samples       : 872
+
+[100/872]  log-odds=-1.7274  comp=0.4046  suff=0.0965  time=0.3777s
+
+[200/872]  log-odds=-1.9708  comp=0.4354  suff=0.1128  time=0.3714s
+
+[300/872]  log-odds=-1.7489  comp=0.4140  suff=0.1263  time=0.3750s
+
+[400/872]  log-odds=-1.5857  comp=0.3812  suff=0.1329  time=0.3704s
+
+[500/872]  log-odds=-1.5577  comp=0.3674  suff=0.1343  time=0.3780s
+
+[600/872]  log-odds=-1.5865  comp=0.3702  suff=0.1336  time=0.3774s
+
+[700/872]  log-odds=-1.6211  comp=0.3759  suff=0.1359  time=0.3741s
+
+[800/872]  log-odds=-1.6039  comp=0.3655  suff=0.1387  time=0.3777s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  distilbert / sst2
+  Log-odds         : -1.600291
+  Comprehensiveness: 0.365602
+  Sufficiency      : 0.136656
+  Avg time/sample  : 0.3783s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    distilbert
+EVAL:     zero
+==========================================================
+Device        : cuda
+Classifier    : distilbert-base-uncased-finetuned-sst-2-english
+MLM oracle    : distilbert-base-uncased-finetuned-sst-2-english  (top_k=3)
+Dataset       : sst2
+Eval baseline : zero
+Samples       : 872
+
+[100/872]  log-odds=-1.8100  comp=0.4046  suff=0.0965  time=0.3744s
+
+[200/872]  log-odds=-2.0287  comp=0.4354  suff=0.1128  time=0.3682s
+
+[300/872]  log-odds=-1.8421  comp=0.4140  suff=0.1263  time=0.3718s
+
+[400/872]  log-odds=-1.6945  comp=0.3812  suff=0.1329  time=0.3672s
+
+[500/872]  log-odds=-1.7170  comp=0.3674  suff=0.1343  time=0.3746s
+
+[600/872]  log-odds=-1.6984  comp=0.3702  suff=0.1336  time=0.3741s
+
+[700/872]  log-odds=-1.7493  comp=0.3759  suff=0.1359  time=0.3703s
+
+[800/872]  log-odds=-1.7093  comp=0.3655  suff=0.1387  time=0.3730s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  distilbert / sst2
+  Log-odds         : -1.731202
+  Comprehensiveness: 0.365602
+  Sufficiency      : 0.136656
+  Avg time/sample  : 0.3731s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+==========================================================
+SCRIPT:   run_eval_reagent_sentiment.py
+MODEL:    distilbert
+EVAL:     mean
+==========================================================
+Device        : cuda
+Classifier    : distilbert-base-uncased-finetuned-sst-2-english
+MLM oracle    : distilbert-base-uncased-finetuned-sst-2-english  (top_k=3)
+Dataset       : sst2
+Eval baseline : mean
+Samples       : 872
+
+[100/872]  log-odds=-1.8285  comp=0.4046  suff=0.0965  time=0.3775s
+
+[200/872]  log-odds=-2.1977  comp=0.4354  suff=0.1128  time=0.3711s
+
+[300/872]  log-odds=-2.0880  comp=0.4140  suff=0.1263  time=0.3746s
+
+[400/872]  log-odds=-1.9269  comp=0.3812  suff=0.1329  time=0.3699s
+
+[500/872]  log-odds=-1.9505  comp=0.3674  suff=0.1343  time=0.3773s
+
+[600/872]  log-odds=-1.8799  comp=0.3702  suff=0.1336  time=0.3768s
+
+[700/872]  log-odds=-1.9559  comp=0.3759  suff=0.1359  time=0.3729s
+
+[800/872]  log-odds=-1.9442  comp=0.3655  suff=0.1387  time=0.3755s
+
+────────────────────────────────────────────────────
+ReAGent-clf (top_k=3)  |  distilbert / sst2
+  Log-odds         : -1.955890
+  Comprehensiveness: 0.365602
+  Sufficiency      : 0.136656
+  Avg time/sample  : 0.3756s
+  Evaluated        : 872  |  Errors: 0
+────────────────────────────────────────────────────
+
+
+All tests completed across all scripts and models.
