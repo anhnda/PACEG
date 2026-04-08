@@ -100,7 +100,7 @@ if __name__ == "__main__":
         data    = list(zip(dataset["text"], dataset["label"]))
         data    = random.sample(data, 2000)
     elif dataset_name == "sst2":
-        dataset = load_dataset("glue", "sst2")["test"]          # FIX 1: "validation" -> "test"
+        dataset = load_dataset("glue", "sst2")["test"]
         data    = list(zip(dataset["sentence"], dataset["label"]))
     elif dataset_name == "rotten":
         dataset = load_dataset("rotten_tomatoes")["test"]
@@ -119,9 +119,10 @@ if __name__ == "__main__":
             baseline=baseline,
         )
 
-        # FIX 2: use res["attributions"] (filtered, matching Doc 6 behavior)
-        # which is the same tensor Doc 6's internal metric calls operate on
-        attr = res["attributions"].to(res["input_embed"].device)
+        # Use attr_full (unfiltered, full-length including special tokens)
+        # to match Doc 6 behavior where metrics are computed inside the
+        # function on the full attribution vector before special token removal
+        attr = res["attr_full"]
 
         log_odd, _ = calculate_log_odds(
             res["nn_forward_func"], res["model"],
