@@ -78,7 +78,7 @@ def load_data(dataset_name: str, num_samples: int):
         data    = list(zip(dataset["text"], dataset["label"]))
         data    = random.sample(data, min(num_samples, len(data)))
     elif dataset_name == "sst2":
-        dataset = load_dataset("glue", "sst2")["validation"]
+        dataset = load_dataset("glue", "sst2")["test"]
         data    = list(zip(dataset["sentence"], dataset["label"]))
         if len(data) > num_samples:
             data = random.sample(data, num_samples)
