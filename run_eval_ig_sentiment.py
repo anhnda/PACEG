@@ -100,7 +100,7 @@ if __name__ == "__main__":
         data    = list(zip(dataset["text"], dataset["label"]))
         data    = random.sample(data, 2000)
     elif dataset_name == "sst2":
-        dataset = load_dataset("glue", "sst2")["validation"]
+        dataset = load_dataset("glue", "sst2")["test"]          # FIX 1: "validation" -> "test"
         data    = list(zip(dataset["sentence"], dataset["label"]))
     elif dataset_name == "rotten":
         dataset = load_dataset("rotten_tomatoes")["test"]
@@ -119,23 +119,26 @@ if __name__ == "__main__":
             baseline=baseline,
         )
 
+        # FIX 2: use res["attributions"] (filtered) instead of res["attr_full"]
+        attr = res["attributions"].to(res["input_embed"].device)
+
         log_odd, _ = calculate_log_odds(
             res["nn_forward_func"], res["model"],
             res["input_embed"], res["position_embed"], res["type_embed"],
             res["attention_mask"], eval_base_token_emb,
-            res["attr_full"], topk=20,
+            attr, topk=20,
         )
         comp = calculate_comprehensiveness(
             res["nn_forward_func"], res["model"],
             res["input_embed"], res["position_embed"], res["type_embed"],
             res["attention_mask"], eval_base_token_emb,
-            res["attr_full"], topk=20,
+            attr, topk=20,
         )
         suff = calculate_sufficiency(
             res["nn_forward_func"], res["model"],
             res["input_embed"], res["position_embed"], res["type_embed"],
             res["attention_mask"], eval_base_token_emb,
-            res["attr_full"], topk=20,
+            attr, topk=20,
         )
 
         log_odds   += log_odd
