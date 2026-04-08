@@ -224,7 +224,7 @@ def attcat_classification(
     }
 
 # ---------------------------------------------------------------------------
-# Main
+# Main — mirrors pace_eval_sentiment.py exactly for fair comparison
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -234,8 +234,6 @@ if __name__ == "__main__":
                         choices=["distilbert", "bert", "roberta"])
     parser.add_argument("--dataset",       type=str, required=True,
                         choices=["sst2", "imdb", "rotten"])
-    parser.add_argument("--n_samples",     type=int, default=2000)
-    parser.add_argument("--print_step",    type=int, default=100)
     parser.add_argument("--eval-baseline", type=str, default="mask",
                         choices=["mask", "pad", "zero", "mean", "random"],
                         help="Baseline embedding used to replace tokens in faithfulness metrics")
@@ -258,16 +256,18 @@ if __name__ == "__main__":
             "rotten": "textattack/roberta-base-rotten-tomatoes",
         },
     }
-    model_name    = MODEL_MAP[args.model][args.dataset]
-    device        = "cuda" if torch.cuda.is_available() else "cpu"
+    model_name   = MODEL_MAP[args.model][args.dataset]
+    dataset_name = args.dataset
+    device       = "cuda" if torch.cuda.is_available() else "cpu"
     eval_baseline = args.eval_baseline
 
-    print(f"Model         : {model_name}")
-    print(f"Dataset       : {args.dataset}")
+    # Print header in the same order as pace_eval_sentiment.py
     print(f"Device        : {device}")
+    print(f"Model         : {model_name}")
+    print(f"Dataset       : {dataset_name}")
     print(f"Eval baseline : {eval_baseline}")
 
-    # Build eval_base_token_emb once
+    # Build eval_base_token_emb once — identical to pace_eval_sentiment.py
     from pace_gradients import get_baseline_embedding
     tokenizer  = AutoTokenizer.from_pretrained(model_name, use_fast=True)
     eval_model = AutoModelForSequenceClassification.from_pretrained(model_name).to(device)
@@ -278,91 +278,87 @@ if __name__ == "__main__":
         dummy_ids = torch.tensor([[tokenizer.cls_token_id or 0]], device=device)
         dummy_X   = embed(dummy_ids)   # (1, 1, d)
 
+    # Computed once, reused for all metric calls
     eval_base_token_emb = get_baseline_embedding(
         eval_baseline, embed, tokenizer, dummy_X, device
     )[0, 0:1, :]   # (1, d)
 
-    # Demo
-    demo_text = (
-        "This is a really bad movie, although it has a promising start, "
-        "it ended on a very low note."
-    )
-    print("\n--- AttCAT demo attribution ---")
-    res_demo = attcat_classification(
-        demo_text, model_name=model_name,
+    # Smoke test — identical sentence and format to pace_eval_sentiment.py
+    text = "This is a really bad movie, although it has a promising start, it ended on a very low note."
+    res  = attcat_classification(
+        text, model_name=model_name,
         show_special_tokens=False, device=device,
     )
-    for tok, val in zip(res_demo["tokens"], res_demo["attributions"]):
-        print(f"  {tok:>15s} : {val.item():+.6f}")
+    print("\nSmoke test:")
+    for tok, val in zip(res["tokens"], res["attributions"]):
+        print(f"{tok:>12s} : {val.item():+.6f}")
 
-    # Dataset
-    print("\nLoading dataset ...")
-    if args.dataset == "imdb":
-        ds   = load_dataset("imdb")["test"]
-        data = list(zip(ds["text"], ds["label"]))
-        data = random.sample(data, min(args.n_samples, len(data)))
-    elif args.dataset == "sst2":
-        ds   = load_dataset("glue", "sst2")["test"]
-        data = list(zip(ds["sentence"], ds["label"]))
-    elif args.dataset == "rotten":
-        ds   = load_dataset("rotten_tomatoes")["test"]
-        data = list(zip(ds["text"], ds["label"]))
-        data = random.sample(data, min(args.n_samples, len(data)))
+    # Dataset — identical sampling logic to pace_eval_sentiment.py
+    if dataset_name == "imdb":
+        dataset = load_dataset("imdb")["test"]
+        data    = list(zip(dataset["text"], dataset["label"]))
+        data    = random.sample(data, 2000)
+    elif dataset_name == "sst2":
+        dataset = load_dataset("glue", "sst2")["test"]
+        data    = list(zip(dataset["sentence"], dataset["label"]))
+    elif dataset_name == "rotten":
+        dataset = load_dataset("rotten_tomatoes")["test"]
+        data    = list(zip(dataset["text"], dataset["label"]))
 
-    print(f"Evaluating {len(data)} samples with AttCAT ...\n")
-
-    log_odds_sum = comps_sum = suffs_sum = total_time_sum = 0.0
-    count = 0
+    log_odds, comps, suffs, count, total_time = 0, 0, 0, 0, 0
+    print_step = 100
+    print("\nStarting AttCAT attribution computation...")
 
     for row in tqdm.tqdm(data):
         text = row[0]
-        try:
-            res = attcat_classification(
-                text, model_name=model_name,
-                show_special_tokens=False, device=device,
-            )
-            log_odd, _ = calculate_log_odds(
-                res["nn_forward_func"], res["model"],
-                res["input_embed"], res["position_embed"], res["type_embed"],
-                res["attention_mask"], eval_base_token_emb,
-                res["attr_full"], topk=20,
-            )
-            comp = calculate_comprehensiveness(
-                res["nn_forward_func"], res["model"],
-                res["input_embed"], res["position_embed"], res["type_embed"],
-                res["attention_mask"], eval_base_token_emb,
-                res["attr_full"], topk=20,
-            )
-            suff = calculate_sufficiency(
-                res["nn_forward_func"], res["model"],
-                res["input_embed"], res["position_embed"], res["type_embed"],
-                res["attention_mask"], eval_base_token_emb,
-                res["attr_full"], topk=20,
-            )
-            log_odds_sum   += log_odd
-            comps_sum      += comp
-            suffs_sum      += suff
-            total_time_sum += res["time"]
-            count += 1
-        except Exception as e:
-            print(f"[WARN] skipped sample: {e}")
-            continue
+        res  = attcat_classification(
+            text, model_name=model_name,
+            show_special_tokens=False, device=device,
+        )
 
-        if count % args.print_step == 0:
+        # Use attr_full (unfiltered, full-length including special tokens)
+        # to match pace_eval_sentiment.py behavior where metrics are computed
+        # on the full attribution vector before special token removal
+        attr = res["attr_full"]
+
+        log_odd, _ = calculate_log_odds(
+            res["nn_forward_func"], res["model"],
+            res["input_embed"], res["position_embed"], res["type_embed"],
+            res["attention_mask"], eval_base_token_emb,
+            attr, topk=20,
+        )
+        comp = calculate_comprehensiveness(
+            res["nn_forward_func"], res["model"],
+            res["input_embed"], res["position_embed"], res["type_embed"],
+            res["attention_mask"], eval_base_token_emb,
+            attr, topk=20,
+        )
+        suff = calculate_sufficiency(
+            res["nn_forward_func"], res["model"],
+            res["input_embed"], res["position_embed"], res["type_embed"],
+            res["attention_mask"], eval_base_token_emb,
+            attr, topk=20,
+        )
+
+        log_odds   += log_odd
+        comps      += comp
+        suffs      += suff
+        total_time += res["time"]
+        count      += 1
+
+        if count % print_step == 0:
             print(
-                f"[{count:>5d}]  "
-                f"Log-odds: {log_odds_sum/count:.4f}  "
-                f"Comp: {comps_sum/count:.4f}  "
-                f"Suff: {suffs_sum/count:.4f}  "
-                f"Time/sample: {total_time_sum/count:.4f}s"
+                f"[{count}]  "
+                f"Log-odds: {log_odds/count:.4f}  "
+                f"Comp: {comps/count:.4f}  "
+                f"Suff: {suffs/count:.4f}  "
+                f"Time: {total_time/count:.4f}s"
             )
 
-    print("\n=== Final Results ===")
-    n = max(count, 1)
     print(
-        f"Log-odds         : {log_odds_sum/n:.4f}\n"
-        f"Comprehensiveness: {comps_sum/n:.4f}\n"
-        f"Sufficiency      : {suffs_sum/n:.4f}\n"
-        f"Time/sample      : {total_time_sum/n:.4f}s\n"
-        f"Total samples    : {count}"
+        f"\nFinal [{count} samples]  "
+        f"Log-odds: {log_odds/count:.4f}  "
+        f"Comp: {comps/count:.4f}  "
+        f"Suff: {suffs/count:.4f}  "
+        f"Time: {total_time/count:.4f}s"
     )

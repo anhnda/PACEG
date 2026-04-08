@@ -28,7 +28,7 @@ torch.backends.cuda.enable_mem_efficient_sdp(False)
 torch.backends.cuda.enable_math_sdp(True)
 
 try:
-    from run_eval_attcat_sentiment import cache as _attcat_cache
+    from attcat_eval_sentiment import cache as _attcat_cache
 except ImportError:
     _attcat_cache = {}
 
@@ -320,17 +320,21 @@ def reagent_classification(
 
 
 def run_benchmark(args):
-    device     = "cuda" if torch.cuda.is_available() else "cpu"
-    model_name = MODEL_NAMES[(args.model, args.dataset)]
+    device       = "cuda" if torch.cuda.is_available() else "cpu"
+    model_name   = MODEL_NAMES[(args.model, args.dataset)]
+    dataset_name = args.dataset
+
+    # Print header in the same order as PACE / AttCAT
     print(f"Device        : {device}")
-    print(f"Classifier    : {model_name}")
+    print(f"Model         : {model_name}")
+    print(f"Dataset       : {dataset_name}")
     print(f"MLM oracle    : {model_name}  (top_k={args.top_k})")
-    print(f"Dataset       : {args.dataset}")
     print(f"Eval baseline : {args.eval_baseline}")
 
     _load_clf(model_name, device)
     _load_mlm(model_name, device)
 
+    # Build eval_base_token_emb once — identical to PACE / AttCAT
     from pace_gradients import get_baseline_embedding
     clf_tokenizer = _clf_cache[model_name]["tokenizer"]
     clf_model     = _clf_cache[model_name]["model"]
@@ -338,82 +342,88 @@ def run_benchmark(args):
 
     with torch.no_grad():
         dummy_ids = torch.tensor([[clf_tokenizer.cls_token_id or 0]], device=device)
-        dummy_X   = embed(dummy_ids)
+        dummy_X   = embed(dummy_ids)   # (1, 1, d)
 
+    # Computed once, reused for all metric calls
     eval_base_token_emb = get_baseline_embedding(
         args.eval_baseline, embed, clf_tokenizer, dummy_X, device
-    )[0, 0:1, :]
+    )[0, 0:1, :]   # (1, d)
 
-    # Dataset — FIX: sst2 dùng "test" split, imdb sample đúng size
-    if args.dataset == "imdb":
+    # Smoke test — identical sentence and format to PACE / AttCAT
+    text = "This is a really bad movie, although it has a promising start, it ended on a very low note."
+    res  = reagent_classification(
+        sentence=text,
+        model_name=model_name,
+        top_k=args.top_k,
+        topk_pct=args.topk_pct,
+        device=device,
+        show_special_tokens=False,
+        eval_base_token_emb=eval_base_token_emb,
+    )
+    print("\nSmoke test:")
+    for tok, val in zip(res["tokens"], res["attributions"]):
+        print(f"{tok:>12s} : {val:+.6f}")
+
+    # Dataset — identical sampling logic to PACE / AttCAT
+    if dataset_name == "imdb":
         dataset = load_dataset("imdb")["test"]
         data    = list(zip(dataset["text"], dataset["label"]))
-        data    = random.sample(data, min(args.num_samples, len(data)))
-    elif args.dataset == "sst2":
+        data    = random.sample(data, 2000)
+    elif dataset_name == "sst2":
         dataset = load_dataset("glue", "sst2")["test"]
         data    = list(zip(dataset["sentence"], dataset["label"]))
-    elif args.dataset == "rotten":
+    elif dataset_name == "rotten":
         dataset = load_dataset("rotten_tomatoes")["test"]
         data    = list(zip(dataset["text"], dataset["label"]))
 
-    if len(data) > args.num_samples:
-        data = random.sample(data, args.num_samples)
-    print(f"Samples       : {len(data)}")
-
-    log_odds = comps = suffs = total_time = 0.0
-    count = errors = 0
+    log_odds, comps, suffs, count, total_time = 0, 0, 0, 0, 0
     print_step = 100
+    print("\nStarting ReAGent attribution computation...")
 
     for row in tqdm(data):
         text = row[0]
-        try:
-            res = reagent_classification(
-                sentence=text,
-                model_name=model_name,
-                top_k=args.top_k,
-                topk_pct=args.topk_pct,
-                device=device,
-                show_special_tokens=False,
-                eval_base_token_emb=eval_base_token_emb,
-            )
-            log_odds   += res["log_odd"]
-            comps      += res["comp"]
-            suffs      += res["suff"]
-            total_time += res["time"]
-            count      += 1
-
-            if count % print_step == 0:
-                print(
-                    f"[{count}]  "
-                    f"Log-odds: {log_odds/count:.4f}  "
-                    f"Comp: {comps/count:.4f}  "
-                    f"Suff: {suffs/count:.4f}  "
-                    f"Time: {total_time/count:.4f}s"
-                )
-        except Exception:
-            errors += 1
-            if errors <= 5:
-                import traceback; traceback.print_exc()
-
-    if count > 0:
-        print(
-            f"\nFinal [{count} samples]  "
-            f"Log-odds: {log_odds/count:.4f}  "
-            f"Comp: {comps/count:.4f}  "
-            f"Suff: {suffs/count:.4f}  "
-            f"Time: {total_time/count:.4f}s"
+        res  = reagent_classification(
+            sentence=text,
+            model_name=model_name,
+            top_k=args.top_k,
+            topk_pct=args.topk_pct,
+            device=device,
+            show_special_tokens=False,
+            eval_base_token_emb=eval_base_token_emb,
         )
+
+        log_odds   += res["log_odd"]
+        comps      += res["comp"]
+        suffs      += res["suff"]
+        total_time += res["time"]
+        count      += 1
+
+        if count % print_step == 0:
+            print(
+                f"[{count}]  "
+                f"Log-odds: {log_odds/count:.4f}  "
+                f"Comp: {comps/count:.4f}  "
+                f"Suff: {suffs/count:.4f}  "
+                f"Time: {total_time/count:.4f}s"
+            )
+
+    print(
+        f"\nFinal [{count} samples]  "
+        f"Log-odds: {log_odds/count:.4f}  "
+        f"Comp: {comps/count:.4f}  "
+        f"Suff: {suffs/count:.4f}  "
+        f"Time: {total_time/count:.4f}s"
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model",        choices=["distilbert", "bert", "roberta"],
+    parser.add_argument("--model",         choices=["distilbert", "bert", "roberta"],
                         default="distilbert")
-    parser.add_argument("--dataset",      choices=["sst2", "imdb", "rotten"],
+    parser.add_argument("--dataset",       choices=["sst2", "imdb", "rotten"],
                         default="sst2")
-    parser.add_argument("--top_k",        type=int, default=3)
-    parser.add_argument("--topk_pct",     type=int, default=20)
-    parser.add_argument("--num_samples",  type=int, default=1000)
+    parser.add_argument("--top_k",         type=int, default=3)
+    parser.add_argument("--topk_pct",      type=int, default=20)
     parser.add_argument("--eval-baseline", type=str, default="mask",
                         choices=["mask", "pad", "zero", "mean", "random"])
     args = parser.parse_args()
