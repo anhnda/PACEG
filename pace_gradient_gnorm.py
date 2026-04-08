@@ -133,6 +133,7 @@ def _normalise(grad_ex: torch.Tensor, mode: str) -> torch.Tensor:
                                 torch.full_like(row_sum2, 1e-10),
                                 row_sum2)
             grad_ex  = torch.where(rows_clipped, grad_ex / denom2, grad_ex)
+        return grad_ex
     elif mode == "square_norm":
         # Squared-gradient normalisation: grad^2 / sum(grad^2)
         # Non-negative outputs that sum to ~1 per step; amplifies large grads
