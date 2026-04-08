@@ -13,8 +13,8 @@ scripts=(
 models=("bert" "roberta" "distilbert")
 
 # Define the list of possible methods for evaluation
-methods=("mask", "pad", "zero", "mean")
-baselines=("mask", "pad", "zero", "mean") 
+methods=("mask" "pad" "zero" "mean")
+baselines=("mask" "pad" "zero" "mean") 
 
 # 1. Iterate through each script
 for script in "${scripts[@]}"; do
